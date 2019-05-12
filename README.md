@@ -14,7 +14,6 @@ Feature
 - New opcodes
 - Extra Palettes for sprites
 - Extra Sprites
-- MP3, Ogg player
 - Second NT
 - 128 colors in palette(instead 64)
 - VT03 gfx
