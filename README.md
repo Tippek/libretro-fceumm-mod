@@ -3,7 +3,6 @@
 MODIFIED FCEUMM-CORE
 Fork. Original: https://github.com/libretro/libretro-fceumm. Features from fceux-mod.
 Feature
-- Feature
 - Extra RAM
 - 256 sprites on screen
 - Post-render overclock
