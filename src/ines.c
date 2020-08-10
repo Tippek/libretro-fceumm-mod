@@ -49,7 +49,7 @@ uint8 *ExtraNTARAM = NULL;
 iNES_HEADER head;
 int anbanks;
 CartInfo iNESCart;
-
+int vrc6_snd;
 uint8 Mirroring = 0;
 uint32 ROM_size = 0;
 uint32 VROM_size = 0;
@@ -713,6 +713,8 @@ if (head.reserve[5] & 8)newopcodes = 1; //mod: LDZ TZA etc
 	if(head.reserve[6]&4)nwram = 1;
 	if(head.reserve[6]&8)anbanks = 1;
 	else anbanks = 0;
+	if(head.reserve[6]&0x10)vrc6_snd = 1;
+	else vrc6_snd = 0;
 exscanlines = ((head.reserve[5] >> 4) * 240);
 // if (head.reserve[6] == 0xDD && head.reserve[7] == 0x0B)exscanlines = 1760;			//mod: extra post-render scanlines
 	

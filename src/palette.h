@@ -7,7 +7,7 @@ typedef struct {
 
 extern pal *palo;
 extern pal *pal512;				 //mod: control RGB by register $401B
-extern pal palette_user[64*8*2]; //mod: is it working?
+extern pal palette_user[64*8*4]; //mod: is it working?
 extern int ipalette;
 void FCEU_ResetPalette(void);
 extern void ApplyDeemphasisComplete(pal* pal512);

@@ -351,8 +351,8 @@ case 0xAB: LD_ZPX(LDZ); //LD_IM(_A|=0xFF;AND;_X=_A);
 case 0xCB: LD_IM(AXS);
 
 /* DCP */
-case 0xC7: RMW_ZP(DEC;CMP);
-case 0xD7: RMW_ZPX(DEC;CMP);
+case 0xC7: LD_ABZ(CMP);// RMW_ZP(DEC;CMP);
+case 0xD7: LD_ABZ(CPX);// RMW_ZPX(DEC;CMP);
 case 0xCF: RMW_ABZ(DEC);
 case 0xDF: LD_ABZ(ORA);//RMW_IX(DEC;CMP);
 case 0xDB: LD_ABZ(AND);//RMW_IX(DEC;CMP);

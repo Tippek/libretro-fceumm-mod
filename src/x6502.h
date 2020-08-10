@@ -78,6 +78,7 @@ void TriggerNMI2(void);
 uint8 FASTAPASS(1) X6502_DMR(uint32 A);
 uint8 FASTAPASS(1) X6502_DMR2(uint32 A);
 void FASTAPASS(2) X6502_DMW(uint32 A, uint8 V);
+void FASTAPASS(2) X6502_ADDCYC(uint32 A);
 void FASTAPASS(2) X6502_DMW2(uint32 A, uint8 V);
 void FASTAPASS(1) X6502_IRQBegin(int w);
 void FASTAPASS(1) X6502_IRQEnd(int w);

@@ -40,9 +40,9 @@ static int ntschue = 72;
 
 /* These are dynamically filled/generated palettes: */
 //mod: palettes doubled
-pal palettei[64*2];		/* Custom palette for an individual game. */
-pal palettec[64*2];		/* Custom "global" palette. */
-pal paletten[64*2];		/* Mathematically generated palette. */
+pal palettei[256];		/* Custom palette for an individual game. */
+pal palettec[256];		/* Custom "global" palette. */
+pal paletten[256];		/* Mathematically generated palette. */
 
 static void CalculatePalette(void);
 static void ChoosePalette(void);
@@ -66,7 +66,7 @@ void FCEUI_SetPaletteArray(uint8 *pal) {
 	else {
 		int x;
 		palpoint[0] = palettec;
-		for (x = 0; x < 64*2; x++) {
+		for (x = 0; x < 128*2; x++) {
 			palpoint[0][x].r = *((uint8*)pal + x + x + x);
 			palpoint[0][x].g = *((uint8*)pal + x + x + x + 1);
 			palpoint[0][x].b = *((uint8*)pal + x + x + x + 2);
@@ -85,7 +85,8 @@ void FCEUI_SetNTSCTH(int n, int tint, int hue) {
 
 static uint8 lastd = 0;
 void SetNESDeemph(uint8 d, int force) {
-	if(vt03_mode) return;
+	if(vt03_mode)
+		return;
 	static uint16 rtmul[7] = { 32768 * 1.239, 32768 * .794, 32768 * 1.019, 32768 * .905, 32768 * 1.023, 32768 * .741, 32768 * .75 };
 	static uint16 gtmul[7] = { 32768 * .915, 32768 * 1.086, 32768 * .98, 32768 * 1.026, 32768 * .908, 32768 * .987, 32768 * .75 };
 	static uint16 btmul[7] = { 32768 * .743, 32768 * .882, 32768 * .653, 32768 * 1.277, 32768 * .979, 32768 * .101, 32768 * .75 };
@@ -102,7 +103,7 @@ void SetNESDeemph(uint8 d, int force) {
 		g = rtmul[6];
 		b = rtmul[6];
 
-		for (x = 0; x < 0x80; x++) {
+		for (x = 0; x < 0x100; x++) {
 			uint32 m, n, o;
 			m = palo[x].r;
 			n = palo[x].g;
@@ -113,7 +114,7 @@ void SetNESDeemph(uint8 d, int force) {
 			if (m > 0xff) m = 0xff;
 			if (n > 0xff) n = 0xff;
 			if (o > 0xff) o = 0xff;
-			FCEUD_SetPalette(x | 0xC0, m, n, o);
+			FCEUD_SetPalette(x, m, n, o);
 		}
 	}
 	if (!d) return;	/* No deemphasis, so return. */
@@ -122,7 +123,7 @@ void SetNESDeemph(uint8 d, int force) {
 	g = gtmul[d - 1];
 	b = btmul[d - 1];
 
-	for (x = 0; x < 0x80; x++) {
+	for (x = 0; x < 0x100; x++) {
 		uint32 m, n, o;
 
 		m = palo[x].r;
@@ -135,7 +136,7 @@ void SetNESDeemph(uint8 d, int force) {
 		if (n > 0xff) n = 0xff;
 		if (o > 0xff) o = 0xff;
 
-		FCEUD_SetPalette(x | 0x40, m, n, o);
+		FCEUD_SetPalette(x, m, n, o);
 	}
 
 	lastd = d;
@@ -151,7 +152,7 @@ static void CalculatePalette(void) {
 	static double br2[4] = { .29, .45, .73, .9 };
 	static double br3[4] = { 0, .24, .47, .77 };
 
-	for (x = 0; x <= 7; x++)
+	for (x = 0; x <= 3; x++)
 		for (z = 0; z < 16; z++) {
 			s = (double)ntsctint / 128;
 			luma = br2[x];
@@ -188,7 +189,7 @@ static void CalculatePalette(void) {
 int ipalette = 0;
 
 void FCEU_LoadGamePalette(void) {
-	uint8 ptmp[192*2];
+	uint8 ptmp[192*4];
 	FILE *fp;
 	char *fn;
 
@@ -198,9 +199,9 @@ void FCEU_LoadGamePalette(void) {
 
 	if ((fp = FCEUD_UTF8fopen(fn, "rb"))) {
 		int x;
-		fread(ptmp, 1, 192*2, fp);
+		fread(ptmp, 1, 192*4, fp);
 		fclose(fp);
-		for (x = 0; x < 128; x++) {
+		for (x = 0; x < 256; x++) {
 			palo[x].r = ptmp[x + x + x];
 			palo[x].g = ptmp[x + x + x + 1];
 			palo[x].b = ptmp[x + x + x + 2];
@@ -236,8 +237,8 @@ void WritePalette(void) {
 		FCEUD_SetPalette(x, unvpalette[x].r, unvpalette[x].g, unvpalette[x].b);
 	if (GameInfo->type == GIT_NSF) {
 	} else {
-		for (x = 0; x < 128; x++)
-			FCEUD_SetPalette(128 + x, palo[x].r, palo[x].g, palo[x].b);
+		for (x = 0; x < 256; x++)
+			FCEUD_SetPalette(x, palo[x].r, palo[x].g, palo[x].b);
 		SetNESDeemph(lastd, 1);
 	}
 }

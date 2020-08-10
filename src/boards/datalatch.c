@@ -35,7 +35,16 @@ static DECLFW(LatchWrite) {
 		latche = V;
 	WSync();
 }
+uint8 WRAM2[0x8000];
+static DECLFW(AWWRAM)
+{
+  WRAM2[A]=V;
+}
 
+static DECLFR(ARWRAM)
+{
+ return(WRAM2[A]);
+}
 static void LatchPower(void) {
 	latche = latcheinit;
 	WSync();
@@ -46,7 +55,13 @@ static void LatchPower(void) {
 	} else {
 		SetReadHandler(0x8000, 0xFFFF, CartBR);
 	}
-	SetWriteHandler(addrreg0, addrreg1, LatchWrite);
+	SetWriteHandler(0x5020, addrreg1, LatchWrite);
+	if(nwram)
+	{
+ SetWriteHandler(0x5000, 0x7FFF, AWWRAM);
+ SetReadHandler(0x5000, 0x7FFF, ARWRAM);
+ AddExState(WRAM2, 0x3000, 0, "WRMM");
+	}
 }
 
 static void LatchClose(void) {
@@ -68,15 +83,23 @@ static void Latch_Init(CartInfo *info, void (*proc)(void), uint8 init, uint16 ad
 	info->Power = LatchPower;
 	info->Close = LatchClose;
 	GameStateRestore = StateRestore;
-	if (wram) {
-		WRAMSIZE = 8192;
-		WRAM = (uint8*)FCEU_gmalloc(WRAMSIZE);
-		SetupCartPRGMapping(0x10, WRAM, WRAMSIZE, 1);
-		if (info->battery) {
-			info->SaveGame[0] = WRAM;
-			info->SaveGameLen[0] = WRAMSIZE;
+
+	if (wram || nwram)
+	{
+
+		{
+			if(!nwram)
+			{
+			WRAMSIZE = 8192;
+			WRAM = (uint8*)FCEU_gmalloc(WRAMSIZE);
+			SetupCartPRGMapping(0x10, WRAM, WRAMSIZE, 1);
+			}
+			if (info->battery) {
+				info->SaveGame[0] = WRAM;
+				info->SaveGameLen[0] = WRAMSIZE;
+			}
+			AddExState(WRAM, WRAMSIZE, 0, "WRAM");
 		}
-		AddExState(WRAM, WRAMSIZE, 0, "WRAM");
 	}
 	AddExState(&latche, 1, 0, "LATC");
 	AddExState(&bus_conflict, 1, 0, "BUSC");
@@ -192,7 +215,7 @@ static void ANROMSync(void) {
 }
 
 void ANROM_Init(CartInfo *info) {
-	Latch_Init(info, ANROMSync, 0, 0x4020, 0xFFFF, 0, 0);
+	Latch_Init(info, ANROMSync, 0, 0x5020, 0xFFFF, 0, 0);
 }
 
 /*------------------ Map 8 ---------------------------*/

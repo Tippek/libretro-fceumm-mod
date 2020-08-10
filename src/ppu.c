@@ -65,7 +65,9 @@ int vblines;
 int vt03_mmc3_flag;
 int vt03_mode;
 int wscre, wssub;
-
+static uint8 priora[512+16];
+static uint8 priora_bg[512+16];
+uint8 priora_main[256];
 uint8 stopclock;
 uint8 spr_add_flag;
 uint8 spr_add_atr[0x100];
@@ -79,6 +81,8 @@ static uint32 ppulut5[256];
 static uint32 ppulut6[256*8];
 static uint32 ppulut7[256*8];
 uint8 extra_ppu[0x10000];
+uint8 chrramm[0x20000];
+uint8 chrambank_V[0x20];
 static void makeppulut(void) {
 	int x;
 	int y;
@@ -180,7 +184,7 @@ uint8 UPALRAM[0x03];/* for 0x4/0x8/0xC addresses in palette, the ones in
 					 */
 
 #define MMC5SPRVRAMADR(V)   &MMC5SPRVPage[(V) >> 10][(V)]
-#define VRAMADR(V)          &VPage[(V) >> 10][(V)]
+#define VRAMADR(V) &VPage[(V) >> 10][(V)]
 
 uint8 * MMC5BGVRAMADR(uint32 V) {
 	if (!Sprite16) {
@@ -239,8 +243,14 @@ if(!sprites256) tmp &= 0x3FFF;
 		{
 				if ((tmp - 0x1000) < 0x2000 || (tmp - 0x1000)>0x3fff)
 				{
-					if(tmp<0x4000)VRAMBuffer = VPage[(tmp - 0x1000) >> 10][tmp - 0x1000];
-					else VRAMBuffer =extra_ppu[tmp-0x1000];
+					if(tmp<0x4000)
+					{
+						if(chrambank_V[tmp>>8])
+							VRAMBuffer = chrramm[(chrambank_V[(tmp-0x1000)>>8]<<8)|((tmp-0x1000)&0xFF)];
+							else
+						VRAMBuffer = VPage[(tmp - 0x1000) >> 10][tmp - 0x1000];
+					}
+					else VRAMBuffer = extra_ppu[tmp-0x1000];
 				}
 			else
 				VRAMBuffer = vnapage[((tmp - 0x1000) >> 10) & 0x3][(tmp - 0x1000) & 0x3FF];
@@ -255,7 +265,13 @@ if(!sprites256) tmp &= 0x3FFF;
 			if (PPU_hook) PPU_hook(tmp);
 			PPUGenLatch = VRAMBuffer;
 				if (tmp < 0x2000 || tmp > 0x7fff) {
-				if(tmp<0x4000 || (tmp<0xA000 && vt03_mmc3_flag))VRAMBuffer = VPage[tmp >> 10][tmp];
+				if(tmp<0x4000 || (tmp<0xA000 && vt03_mmc3_flag))
+				{
+							if(chrambank_V[tmp>>8])
+							VRAMBuffer = chrramm[(chrambank_V[tmp>>8]<<8)|(tmp&0xFF)];
+							else
+							VRAMBuffer = VPage[tmp >> 10][tmp];
+				}
 					else VRAMBuffer = extra_ppu[tmp];
 			} else if (tmp < 0x3F00)
 				VRAMBuffer = vnapage[(tmp >> 10) & 0x3][tmp & 0x3FF];
@@ -415,15 +431,20 @@ static DECLFW(B3006) {
 	vtoggle2 ^= 1;
 }
 static DECLFW(B2007) {
-	uint32 tmp = RefreshAddr & 0xfFFF;
-	if(!sprites256) tmp &= 0x3FFF;
+	uint16 tmp = RefreshAddr & 0xfFFF;
+//	if(!sprites256) tmp &= 0x3FFF;
 		FCEUPPU_LineUpdate();
 	PPUGenLatch = V;
 	if (tmp < 0x2000 || tmp > 0x3FFF) {
 //mod: we don't need protected vram in extra mode?
-if (PPUCHRRAM & (1 << (tmp >> 10)) || !sprites256) //mod: still need for original games(codemaster?)
-			if(tmp<0x4000)VPage[tmp >> 10][tmp] = V;
-
+//if (PPUCHRRAM & (1 << (tmp >> 10)) || !sprites256) //mod: still need for original games(codemaster?)
+			if(tmp<0x2000)
+			{
+				if(chrambank_V[tmp>>8])
+							chrramm[(chrambank_V[tmp>>8]<<8)|(tmp&0xFF)] = V;
+							else
+				VPage[tmp >> 10][tmp] = V;
+			}
 					extra_ppu[tmp]=V;				//mod: save all vram anyway(debug and some codes below)
 	} else if (tmp < 0x3F00) 
 	{
@@ -470,20 +491,20 @@ if (PPUCHRRAM & (1 << (tmp >> 10)) || !sprites256) //mod: still need for origina
 			{
 			if (!(tmp & 0xF)) {
 				if (!(tmp & 0x30))
-					PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0x7f;
+					PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0xff;
 			} else
-				PALRAM[tmp & 0xfF] = V & 0x7f;
+				PALRAM[tmp & 0xfF] = V & 0xff;
 			}
 			else
 			{
 			if(!sprites256) V &=0x3F;
 			if (!(tmp & 0x3)) {
 				if (!(tmp & 0x0C))
-					PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0x7f;
+					PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0xff;
 				else
-					UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0x7f;
+					UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0xff;
 			} else
-				PALRAM[tmp & 0xfF] = V & 0x7f;
+				PALRAM[tmp & 0xfF] = V & 0xff;
 			}
 		}
  
@@ -804,22 +825,53 @@ static DECLFW(B401D) {
 
 	minus_line = V;
 }
+static DECLFW(CHRAMB)
+{
+	A &= 0x1F;
+	chrambank_V[A] = V;
+
+}
 
 static DECLFW(B4014) {
 	uint32 t = V << 8;
 	int x;
-
-	if (sprites256) {
-		for (x = 0;x<1024;x++)
+X6502_ADDCYC(512);
+		 if(sprites256) {
+			
+		for(x=0;x<1024;x++)
+			{
+		V = ARead[t+x](t+x);
+	if (PPUSPL >= 8) {
+		if (PPU[3] >= 8)
+			SPRAM[PPU[3]] = V;
+	} else {
+		SPRAM[PPUSPL] = V;
+	}
+	PPUGenLatch = V;
+	PPU[3]++;
+	PPUSPL++;
+    PPU[3] %= 0x400;
+	PPUSPL %= 0x400;
+			}
+		 }
+		 else
+		 {
+		for(x=0;x<256;x++)
 		{
-			if(x<768)X6502_DMW2(0x2004, X6502_DMR2(t + x));
-			else X6502_DMW(0x2004, X6502_DMR(t + x));
+		V = ARead[t+x](t+x);
+	if (PPUSPL >= 8) {
+		if (PPU[3] >= 8)
+			SPRAM[PPU[3]] = V;
+	} else {
+		SPRAM[PPUSPL] = V;
+	}
+	PPUGenLatch = V;
+	PPU[3]++;
+	PPUSPL++;
+	PPU[3] %= 0x100;
+	PPUSPL %= 0x100;
 		}
-	}
-	else {
-		for (x = 0;x<256;x++)
-			X6502_DMW(0x2004, X6502_DMR(t + x));
-	}
+		 }
 }
 
 #define PAL(c)  ((c) + cc)
@@ -848,7 +900,7 @@ static DECLFR(A2004)
         }
 }
 static void ResetRL(uint8 *target) {
-	memset(target, 0xFF, 512);
+	memset(target, 0x0, 512);
 	if (InputScanlineHook)
 		InputScanlineHook(0, 0, 0, 0);
 	Plinef = target;
@@ -913,7 +965,7 @@ static void CheckSpriteHit(int p) {
 	if (sphitx == 0x100) return;
 
 	for (x = sphitx; x < (sphitx + 8) && x < l; x++) {
-		if ((sphitdata & (0x80 >> (x - sphitx))) && !(Plinef[x] & 128) && x < 255) {
+		if((sphitdata & (0x80 >> (x - sphitx)))&& (priora_bg[x]) ) {
 			PPU_status |= 0x40;
 			sphitx = 0x100;
 			break;
@@ -982,7 +1034,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 	if (!ScreenON && !SpriteON) {
 		uint32 tem;
 		tem = Pal[0] | (Pal[0] << 8) | (Pal[0] << 16) | (Pal[0] << 24);
-		tem |= 0x80808080;
+		tem |= 0;//0x80808080;
 		FCEU_dwmemset(Pline, tem, numtiles * 8);
 		P += numtiles * 8;
 		Pline = P;
@@ -1002,7 +1054,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 		return;
 	}
 
-	/* Priority bits, needed for sprite emulation. */
+	/* Priority bits, needed for sprite emulation. 
 if(vt03_mode)
 {
 	PALRAM[0]    |= 128;
@@ -1017,7 +1069,7 @@ else
 	PALRAM[0x8] |= 128;
 	PALRAM[0xC] |= 128;
 }
-
+*/
 	/* This high-level graphics MMC5 emulation code was written for MMC5 carts in "CL" mode.
 	 * It's probably not totally correct for carts in "SL" mode.
 	 */
@@ -1095,7 +1147,7 @@ else
 #undef RefreshAddr
 #undef RefreshAddr2
 
-	/* Reverse changes made before. */
+	/* Reverse changes made before. 
 	if(vt03_mode)
 	{
 	PALRAM[0]    &= 127;
@@ -1110,13 +1162,13 @@ else
 	PALRAM[0x8] &= 127;
 	PALRAM[0xC] &= 127;
 	}
-
+*/
 	RefreshAddr = smorkus;
 	RefreshAddr2 = smorkus2;
 	if (firsttile <= 2 && 2 < lasttile && !(PPU[1] & 2)) {
 		uint32 tem;
 		tem = Pal[0] | (Pal[0] << 8) | (Pal[0] << 16) | (Pal[0] << 24);
-		tem |= 0x80808080;
+		tem |= 0;//0x80808080;
 		*(uint32*)Plinef = *(uint32*)(Plinef + 4) = tem;
 	}
 
@@ -1124,7 +1176,7 @@ else
 		uint32 tem;
 		int tstart, tcount;
 		tem = Pal[0] | (Pal[0] << 8) | (Pal[0] << 16) | (Pal[0] << 24);
-		tem |= 0x80808080;
+		tem |= 0;// 0x80808080;
 
 		tcount = lasttile - firsttile;
 		tstart = firsttile - 2;
@@ -1224,7 +1276,7 @@ static void Fixit12(void) {
 void MMC5_hb(int);		/* Ugh ugh ugh. */
 static void DoLine(void)
 {
-	
+
 
    int x;
    uint8 *target = NULL;
@@ -1246,7 +1298,7 @@ static void DoLine(void)
 	if (rendis & 2) {/* User asked to not display background data. */
 		uint32 tem;
 		tem = Pal[0] | (Pal[0] << 8) | (Pal[0] << 16) | (Pal[0] << 24);
-		tem |= 0x80808080;
+		tem |= 0;//0x80808080;
 		FCEU_dwmemset(target, tem, 512);
 	}
 
@@ -1261,16 +1313,20 @@ static void DoLine(void)
 	}
 	if ((PPU[1] >> 5) == 0x7) {
 		for (x = (wss/2-1); x >= 0; x--)
-			*(uint32*)&target[x << 2] = ((*(uint32*)&target[x << 2]) & 0x7f7f7f7f) | 0xc0c0c0c0;
+			*(uint32*)&target[x << 2] = (*(uint32*)&target[x << 2]);
 	} else if (PPU[1] & 0xE0)
 		for (x = (wss/2-1); x >= 0; x--)
-			*(uint32*)&target[x << 2] = (*(uint32*)&target[x << 2]) | 0x80808080;
+			*(uint32*)&target[x << 2] = (*(uint32*)&target[x << 2]);
 	else
 		for (x = (wss/2-1); x >= 0; x--)
-			*(uint32*)&target[x << 2] = ((*(uint32*)&target[x << 2]) & 0x7f7f7f7f) | 0x80808080;
+			*(uint32*)&target[x << 2] = (*(uint32*)&target[x << 2]) ;
 
 	sphitx = 0x100;
-
+	for(int x =0; x<(wss+16); x++)
+{
+	
+	priora[x] = 0;
+}
 	if (ScreenON || SpriteON)
 		FetchSpriteData();
 
@@ -1299,6 +1355,7 @@ static void DoLine(void)
 		ResetRL(XBuf + (scanline*wss));
 	}
 	X6502_Run(16);
+	
 }
 
 #define V_FLIP  0x80
@@ -1386,7 +1443,15 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 				if (MMC5Hack && geniestage != 1 && Sprite16) C = MMC5SPRVRAMADR(vadr);
 				else 
 				{				
-					if(vadr<0x4000)C = VRAMADR(vadr);
+					if(vadr<0x2000)
+					{
+						
+						if(chrambank_V[vadr>>8])
+						C = &chrramm[(chrambank_V[vadr>>8]<<8)|(vadr&0xFF)];
+							else
+						C = VRAMADR(vadr);
+						
+					}
 					else
 					{
 					if(vt03_mmc3_flag && vadr <0xA000) C = VRAMADR(vadr);
@@ -1495,7 +1560,14 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 				else 
 				{
 
-				if(vadr<0x4000)C = VRAMADR(vadr);
+				if(vadr<0x2000)
+				{
+						if(chrambank_V[vadr>>8])
+						C = &chrramm[(chrambank_V[vadr>>8]<<8)|(vadr&0xFF)];
+							else
+						C = VRAMADR(vadr);
+					
+				}
 				else
 				{
 				if(vt03_mmc3_flag && vadr <0xA000 && vt03_mode) C = VRAMADR(vadr);
@@ -1566,7 +1638,7 @@ int ex_pal;
 		int x = spr->x;
 		uint8 *C;
 		uint8 *C2;
-		int VB;
+		uint8 *VB;
 	if(vt03_mode)	J = spr->ca[0] | spr->ca[1] | spr->ca[2] | spr->ca[3];
 	else J = spr->ca[0] | spr->ca[1];
 	
@@ -1576,16 +1648,17 @@ int ex_pal;
 			}
 			//mod: detect 3F20-3FFF write
 		 if(!sprites256)ex_pal=0;
-         if(ex_pal==1)VB = (0x10)+((atr&0xF)<<2);
-		 else VB = (0x10)+((atr&0x3)<<2);
-		 if(vt03_mode) VB = (0x40)+((atr&0xF)<<4); //mod: 16 colors palette
+         if(ex_pal)VB = (PALRAM+0x10)+((atr&0xF)<<2);
+		 else VB = (PALRAM+0x10)+((atr&0x3)<<2);
+		 if(vt03_mode) VB = (PALRAM+0x40)+((atr&0xF)<<4); //16 colors?
 		 
 		 
-		pixdata = ppulut1[spr->ca[0]] | ppulut2[spr->ca[1]];
+		
 		if (vt03_mode)pixdata = ppulut1[spr->ca[0]] | ppulut2[spr->ca[1]] | ppulut4[spr->ca[2]] | ppulut5[spr->ca[3]];
+		else pixdata = ppulut1[spr->ca[0]] | ppulut2[spr->ca[1]];
 
 
-		pixdata2 = pixdata;
+		
 		if (J) {
 		if (n == 0 && SpriteBlurp && !(PPU_status & 0x40)) {
 			sphitx = x;
@@ -1605,160 +1678,189 @@ int ex_pal;
             
 			C = sprlinebuf + x;
 
-		
-			if(vt03_mode)
-	
+	uint8 lx = J;
+	if(!(atr & SP_BACK))
+		for( int y = x; y<(x+8); y++)
+		{
+			if(lx&0x80)
+			if(atr&H_FLIP)
 			{
-			if (atr & SP_BACK) {
-				if (atr & H_FLIP) {
-					if (J & 0x80) C[7] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;									
-					if (J & 0x40) C[6] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;									
-					if (J & 0x20) C[5] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;									 
-					if (J & 0x10) C[4] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;									 
-					if (J & 0x08) C[3] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;									
-					if (J & 0x04) C[2] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;									 
-					if (J & 0x02) C[1] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;									
-					if (J & 0x01) C[0] = READPAL(VB | pixdata)        & 0x7F | 0x80;
+				priora[x+x+7-y] = 1;
 
-				} else {
-					if (J & 0x80) C[0] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;
-					if (J & 0x40) C[1] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;
-					if (J & 0x20) C[2] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;
-					if (J & 0x10) C[3] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;
-					if (J & 0x08) C[4] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;
-					if (J & 0x04) C[5] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;
-					if (J & 0x02) C[6] = READPAL(VB | (pixdata & 0xF))& 0x7F | 0x80;
-					pixdata >>= 4;
-					if (J & 0x01) C[7] = READPAL(VB | pixdata)        & 0x7F | 0x80;
-				}
-			} else {
-				if (atr & H_FLIP) {
-					if (J & 0x80) C[7] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x40) C[6] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x20) C[5] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x10) C[4] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x08) C[3] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x04) C[2] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x02) C[1] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x01) C[0] = READPAL(VB | pixdata);
-
-				} else {
-					if (J & 0x80) C[0] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x40) C[1] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x20) C[2] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x10) C[3] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x08) C[4] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x04) C[5] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x02) C[6] = READPAL(VB | (pixdata & 0xF));
-					pixdata >>= 4;
-					if (J & 0x01) C[7] = READPAL(VB | pixdata);
-
-				}
-			}
 			}
 			else
 			{
-				if (atr & SP_BACK) {
-				if (atr & H_FLIP) {
-					if (J & 0x80) C[7] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x40) C[6] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x20) C[5] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x10) C[4] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x08) C[3] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x04) C[2] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x02) C[1] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x01) C[0] = READPAL(VB | pixdata) | 0x80;
-
-				} else {
-					if (J & 0x80) C[0] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x40) C[1] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x20) C[2] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x10) C[3] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x08) C[4] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x04) C[5] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x02) C[6] = READPAL(VB | (pixdata & 0xF)) | 0x80;
-					pixdata >>= 4;
-					if (J & 0x01) C[7] = READPAL(VB | pixdata) | 0x80;
-
-				}
-			} else {
-				if (atr & H_FLIP) {
-					if (J & 0x80) C[7] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x40) C[6] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x20) C[5] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x10) C[4] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x08) C[3] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x04) C[2] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x02) C[1] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x01) C[0] = READPAL(VB | pixdata);
-
-				} else {
-					if (J & 0x80) C[0] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x40) C[1] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x20) C[2] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x10) C[3] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x08) C[4] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x04) C[5] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x02) C[6] = READPAL(VB | (pixdata & 0x3));
-					pixdata >>= 4;
-					if (J & 0x01) C[7] = READPAL(VB | pixdata);
-
+				priora[y] = 1;
 			}
-				}
+
+			lx <<=1;
 		}
-	}
+     if(vt03_mode){
+		 if (atr&H_FLIP)
+         {
+	   if(J & 0x80) {C[7]=VB[pixdata&0xF];
+		if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+7] = 1;
+		else priora[x+7] = 0;}
+           pixdata>>=4;
+	   if(J & 0x40){ C[6]=VB[pixdata&0xF];
+	   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+6] = 1;
+	   else priora[x+6] = 0;}
+           pixdata>>=4;
+           if(J & 0x20){ C[5]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+5] = 1;
+		   else priora[x+5] = 0;}
+           pixdata>>=4;
+           if(J & 0x10){ C[4]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+4] = 1;
+		   else priora[x+4] = 0;}
+           pixdata>>=4;
+           if(J & 0x08){ C[3]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+3] = 1;
+		   else priora[x+3] = 0;}
+           pixdata>>=4;
+           if(J & 0x04){ C[2]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+2] = 1;
+		   else priora[x+2] = 0;}
+           pixdata>>=4;
+           if(J & 0x02) {C[1]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+1] = 1;
+		   else priora[x+1] = 0;}
+           pixdata>>=4;
+           if(J & 0x01) {C[0]=VB[pixdata]; 
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x] = 1;
+		   else priora[x] = 0;}
+         } else  {
+	   if(J & 0x80){ C[0]=VB[pixdata&0xF];
+	   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x] = 1;
+	   else priora[x] = 0;}
+           pixdata>>=4;
+           if(J & 0x40) {C[1]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+1] = 1;
+		   else priora[x+1] = 0;}
+           pixdata>>=4;
+	   if(J & 0x20){ C[2]=VB[pixdata&0xF];
+	   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+2] = 1;
+	   else priora[x+2] = 0;}
+           pixdata>>=4;
+           if(J & 0x10){ C[3]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+3] = 1;
+		   else priora[x+3] = 0;}
+           pixdata>>=4;
+		   if(J & 0x08){ C[4]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+4] = 1;
+		   else priora[x+4] = 0;}
+           pixdata>>=4;
+           if(J & 0x04){ C[5]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+5] = 1;
+		   else priora[x+5] = 0;}
+           pixdata>>=4;
+           if(J & 0x02){ C[6]=VB[pixdata&0xF];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+6] = 1;
+		   else priora[x+6] = 0;}
+           pixdata>>=4;
+           if(J & 0x01){ C[7]=VB[pixdata];
+		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+7] = 1;
+		   else priora[x+7] = 0;}
+         }
+        }
+					   
+     else{
+		 if (atr&H_FLIP)
+        {
+	   if(J & 0x80){ C[7]=VB[pixdata&3];
+	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+7] = 1;
+	   else priora[x+7] = 0;}
+          pixdata>>=4;
+	   if(J & 0x40){ C[6]=VB[pixdata&3];
+	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+6] = 1;
+	   else priora[x+6] = 0;}
+          pixdata>>=4;
+          if(J & 0x20) {C[5]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+5] = 1;
+		  else priora[x+5] = 0;}
+          pixdata>>=4;
+          if(J & 0x10){ C[4]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+4] = 1;
+		  else priora[x+4] = 0;}
+          pixdata>>=4;
+          if(J & 0x08) {C[3]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+3] = 1;
+		  else priora[x+3] = 0;}
+          pixdata>>=4;
+          if(J & 0x04) 
+			  {C[2]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+2] = 1;
+		  else priora[x+2] = 0;}
+          pixdata>>=4;
+          if(J & 0x02) 
+			  {
+				  C[1]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+1] = 1;
+		   else priora[x+1] = 0;
+		  }
+          pixdata>>=4;
+          if(J & 0x01) 
+			  {
+				  C[0]=VB[pixdata];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x] = 1;
+		   else priora[x] = 0;
+		  }
+        } else  {
+	   if(J & 0x80)
+		   {
+			   C[0]=VB[pixdata&3];
+	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x] = 1;
+	    else priora[x] = 0;
+	   }
+          pixdata>>=4;
+          if(J & 0x40) {C[1]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+1] = 1;
+		  else priora[x+1] = 0;}
+          pixdata>>=4;
+	   if(J & 0x20) 
+		   {
+			   C[2]=VB[pixdata&3];
+	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+2] = 1;
+	    else priora[x+2] = 0;
+	   }
+          pixdata>>=4;
+          if(J & 0x10) 
+			  {
+				  C[3]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+3] = 1;
+		   else priora[x+3] = 0;
+		  }
+          pixdata>>=4;
+          if(J & 0x08)
+			  {
+				  C[4]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+4] = 1;
+		   else priora[x+4] = 0;
+		  }
+          pixdata>>=4;
+          if(J & 0x04) 
+	    	{
+			C[5]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+5] = 1;
+		   else priora[x+5] = 0;
+		  }
+          pixdata>>=4;
+          if(J & 0x02) 
+		  {
+				  C[6]=VB[pixdata&3];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+6] = 1;
+		   else priora[x+6] = 0;
+		  }
+          pixdata>>=4;
+          if(J & 0x01) 
+		  {
+			  C[7]=VB[pixdata];
+		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+7] = 1;
+		   else priora[x+7] = 0;
+		  }
+        }
+	 }
+      }
 	}
 	SpriteBlurp = 0;
 	spork = 1;
@@ -1774,22 +1876,16 @@ static void CopySprites(uint8 *target) {
 
  loopskie:
 	{
-		uint32 t = *(uint32*)(sprlinebuf + n);
-		
-		if ((t & 0x7F))
-			if (!(t & 0x80) || (P[n] & 0x80))		// Normal sprite || behind bg sprite
+			//	uint32 t = *(uint32*)(sprlinebuf + n);
+		if((priora[n] || !priora_bg[n]  )&& sprlinebuf[n] )
 				P[n] = sprlinebuf[n];
-		if (((t>>8)&0x7F)) 
-			if (!(t & 0x8000) || (P[n + 1] & 0x80))		// Normal sprite || behind bg sprite
+		if((priora[n+1] || !priora_bg[n+1] )&& sprlinebuf[n+1])
 				P[n + 1] = (sprlinebuf + 1)[n];
-
-		if (((t>>16)&0x7F))// {
-			if (!(t & 0x800000) || (P[n + 2] & 0x80))	// Normal sprite || behind bg sprite
+		if((priora[n+2] || !priora_bg[n+2] )&& sprlinebuf[n+2])
 				P[n + 2] = (sprlinebuf + 2)[n];
-
-		if ((t>>24)&0x7F) 
-			if (!(t & 0x80000000) || (P[n + 3] & 0x80))	// Normal sprite || behind bg sprite
+			if((priora[n+3] || !priora_bg[n+3])&& sprlinebuf[n+3])
 				P[n + 3] = (sprlinebuf + 3)[n];
+			
 	}
 	n += 4;
 	if(n==wss) n=0;
@@ -1816,7 +1912,10 @@ void FCEUPPU_Init(void) {
 void FCEUPPU_Reset(void) {
 	VRAMBuffer = PPU[0] = PPU[1] = PPU_status = PPU[3] = 0;
 	for(int x = 0; x<0x10000; x++)extra_ppu[x] = 0;
-
+	for(int x = 0; x<0x20000; x++)
+		chrramm[x] = 0;
+		for(int x = 0; x<0x20; x++)
+		chrambank_V[x] = 0;
 	PPUSPL = 0;
 	PPUGenLatch = 0;
 	RefreshAddr = TempAddr = 0;
@@ -1883,6 +1982,7 @@ void FCEUPPU_Power(void) {
 		ARead[x + 7] = A12007;
 		BWrite[x + 7] = B12007;
 	}
+		
 	BWrite[0x4014] = B4014;
 	if(sprites256)   //mod: some codemaster games use 401C? hmm
 	{
@@ -1897,6 +1997,7 @@ void FCEUPPU_Power(void) {
 	BWrite[0x3005] = B3005;
 	BWrite[0x3006] = B3006;
 	BWrite[0x3007] = B3007;
+SetWriteHandler(0x4080, 0x40A0, CHRAMB);
 	}
 }
 
@@ -1904,7 +2005,7 @@ void FCEUPPU_Power(void) {
 int FCEUPPU_Loop(int skip) {
 	/* Needed for Knight Rider, possibly others. */
 	if (ppudead) {
-		memset(XBuf, 0x80, 512 * 240);
+		memset(XBuf, 0x0, 512 * 240);
 		X6502_Run(scanlines_per_frame * (256 + 85));
 		ppudead--;
 	} else {
@@ -2047,11 +2148,11 @@ int FCEUPPU_Loop(int skip) {
 	}
 }
 
-uint8 palm[128*3];
+uint8 palm[256*3];
 static uint16 TempAddrT, RefreshAddrT, TempAddrT2, RefreshAddrT2;
 
 void FCEUPPU_LoadState(int version) {
-		for(int i = 0; i<128; i++)
+		for(int i = 0; i<256; i++)
 	{
 		palo[i].r = palm[i*3];
 		palo[i].g = palm[i*3+1];
@@ -2068,9 +2169,11 @@ SFORMAT FCEUPPU_STATEINFO[] = {
 	{ NTARAM, 0x800, "NTAR" },
 	{ NTARAM2, 0x800, "NTR2" },
 	{ PALRAM, 0x100, "PRAM" },
-	{ palm, 128*3, "PALM" },
+	{ palm, 256*3, "PALM" },
 	{ SPRAM, 0x400, "SPRA" },
 	{ extra_ppu, 0x10000, "EXPPU" },
+	{ chrramm, 0x20000, "CHRMM" },
+	{ chrambank_V, 0x20, "CHRBK" },
 	{ PPU, 0x4, "PPUR" },
 	{ &kook, 1, "KOOK" },
 	{ &stopclock, 1, "FLAGV" },
@@ -2101,7 +2204,7 @@ SFORMAT FCEUPPU_STATEINFO[] = {
 
 
 void FCEUPPU_SaveState(void) {
-	for(int i = 0; i<128; i++)
+	for(int i = 0; i<256; i++)
 	{
 		palm[i*3] = palo[i].r;
 		palm[i*3+1] = palo[i].g;

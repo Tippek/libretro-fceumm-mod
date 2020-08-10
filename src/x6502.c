@@ -114,6 +114,9 @@ uint8 FASTAPASS(1) X6502_DMR(uint32 A) {
 uint8 FASTAPASS(1) X6502_DMR2(uint32 A) {
 	return(X.DB = ARead[A](A));
 }
+void FASTAPASS(2) X6502_ADDCYC(uint32 A) {
+		ADDCYC(A);	
+}
 void FASTAPASS(2) X6502_DMW(uint32 A, uint8 V) {
 	
 
@@ -155,7 +158,7 @@ static uint8 ZNTable[256];
 
 #define DMA   _A = _A*x;X_ZN(_A) 	//mod: Dimension by A
 #define DVA   _A = _A/x;X_ZN(_A)	//mod: Division by A
-#define DAV   _A = _A % x;X_ZN(_A)	//mod: well another division option
+#define DAV  if(x)_A = _A%x;X_ZN(_A);	//mod: well another division option
 
 #define INNY  {  \
         _Y=_Y+x;  \
@@ -410,8 +413,8 @@ static uint8 CycTableOC[256] =
 /*0x90*/ 2,6,0,0,4,4,4,0,2,5,2,0,0,5,0,5,
 /*0xA0*/ 2,6,2,0,3,3,3,0,2,2,2,0,4,4,4,0,
 /*0xB0*/ 2,5,0,0,4,4,4,0,2,4,2,0,4,4,4,0,
-/*0xC0*/ 2,6,2,0,3,3,5,5,2,2,2,2,4,4,6,6,
-/*0xD0*/ 2,5,2,0,4,4,6,6,2,4,2,0,4,4,7,0,
+/*0xC0*/ 2,6,2,0,3,3,5,0,2,2,2,2,4,4,6,6,
+/*0xD0*/ 2,5,2,0,4,4,6,0,2,4,2,0,4,4,7,0,
 /*0xE0*/ 2,6,3,8,3,3,5,5,2,2,2,2,4,4,6,6,
 /*0xF0*/ 2,5,0,0,4,4,6,6,2,4,2,7,4,4,7,7,
 };

@@ -209,7 +209,15 @@ void ResetGameLoaded(void)
 	GameStateRestore = NULL;
 	PPU_hook = NULL;
 	GameHBIRQHook = NULL;
+	if(vrc6_snd)
+	{
 
+	GameExpSound.RChange = 0;
+	GameExpSound.Fill = 0;
+	GameExpSound.HiFill = 0;
+	GameExpSound.HiSync = 0;
+
+	}
 	if (GameExpSound.Kill)
 		GameExpSound.Kill();
 	memset(&GameExpSound, 0, sizeof(GameExpSound));

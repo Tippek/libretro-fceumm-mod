@@ -59,7 +59,7 @@ static SFORMAT SStateRegs[] =
 
 static void Sync(void) {
 	uint8 i;
-	if (is26)
+//	if (is26)
 		setprg8r(0x10, 0x6000, 0);
 	setprg16(0x8000, prg[0]);
 	setprg8(0xc000, prg[1]);
@@ -347,6 +347,14 @@ void Mapper24_Init(CartInfo *info) {
 	MapIRQHook = VRC6IRQHook;
 	VRC6_ESI();
 	GameStateRestore = StateRestore;
+			WRAMSIZE = 8192;
+	WRAM = (uint8*)FCEU_gmalloc(WRAMSIZE);
+	SetupCartPRGMapping(0x10, WRAM, WRAMSIZE, 1);
+	AddExState(WRAM, WRAMSIZE, 0, "WRAM");
+	if (info->battery) {
+		info->SaveGame[0] = WRAM;
+		info->SaveGameLen[0] = WRAMSIZE;
+	}
 	AddExState(&SStateRegs, ~0, 0, 0);
 	AddExState(&StateRegs, ~0, 0, 0);
 }

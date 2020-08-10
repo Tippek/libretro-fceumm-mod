@@ -131,7 +131,7 @@ int FCEUD_SendData(void *data, uint32 len)
    return 1;
 }
 
-#define BUILD_PIXEL_RGB565(R,G,B) (((int) ((R)&0x7f) << RED_SHIFT) | ((int) ((G)&0x7f) << GREEN_SHIFT) | ((int) ((B)&0x7f) << BLUE_SHIFT))
+#define BUILD_PIXEL_RGB565(R,G,B) (((int) ((R)&0xff) << RED_SHIFT) | ((int) ((G)&0xff) << GREEN_SHIFT) | ((int) ((B)&0xff) << BLUE_SHIFT))
 
 #if defined (PSP)
 #define RED_SHIFT 0
@@ -228,7 +228,7 @@ extern int ipalette;
 struct st_palettes {
 	char name[32];
 	char desc[32];
-	unsigned int data[128];
+	unsigned int data[256];
 };
 static unsigned nes_to_libretro(int d)
 {
@@ -844,9 +844,9 @@ void retro_get_system_info(struct retro_system_info *info)
    info->need_fullpath    = false;
    info->valid_extensions = "fds|nes|unf|unif|nesm";
 #ifdef GIT_VERSION
-   info->library_version  = "(0.9.45.1.0.0.7b)" GIT_VERSION;
+   info->library_version  = "(0.9.45.1.0.0.C0)" GIT_VERSION;
 #else
-   info->library_version  = "(0.9.45.1.0.0.7b)";
+   info->library_version  = "(0.9.45.1.0.0.C0)";
 #endif
    info->library_name     = "FCEUmmod";
    info->block_extract    = false;
@@ -926,7 +926,7 @@ static void retro_set_custom_palette(void)
    if (current_palette == MAXPAL) /* raw palette */
    {
       use_raw_palette = true;
-      for (i = 0; i < 128; i++)
+      for (i = 0; i < 256; i++)
       {
       //   r = (((i >> 0) & 0xF) * 255) / 15;
       //   g = (((i >> 4) & 0x3) * 255) / 3;
@@ -937,15 +937,15 @@ static void retro_set_custom_palette(void)
 
    /* Setup this palette*/
 
-   for ( i = 0; i < 128; i++ )
+   for ( i = 0; i < 256; i++ )
    {
       r = palettes[current_palette-1].data[i] >> 16;
       g = ( palettes[current_palette-1].data[i] & 0xff00 ) >> 8;
       b = ( palettes[current_palette-1].data[i] & 0xff );
       FCEUD_SetPalette( i, r, g, b);
-      FCEUD_SetPalette( i+64, r, g, b);
-      FCEUD_SetPalette( i+128, r, g, b);
-      FCEUD_SetPalette( i+192, r, g, b);
+      FCEUD_SetPalette( i, r, g, b);
+      FCEUD_SetPalette( i, r, g, b);
+      FCEUD_SetPalette( i, r, g, b);
    }
 }
 
@@ -1681,7 +1681,7 @@ static void retro_run_blit(uint8_t *gfx)
       int deemp = (PPU[1] >> 5) << 2;
       for (y = 0; y < height; y++, gfx += incr)
          for ( x = 0; x < width; x++, gfx++)
-            fceu_video_out[y * width + x] = retro_palette[*gfx & 0x7F] | deemp;
+            fceu_video_out[y * width + x] = retro_palette[*gfx & 0xff] | deemp;
    }
    else
    {

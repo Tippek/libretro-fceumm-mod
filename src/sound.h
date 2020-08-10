@@ -39,7 +39,7 @@ typedef struct {
 } EXPSOUND;
 
 extern EXPSOUND GameExpSound;
-
+extern int vrc6_snd;
 extern int32 nesincsize;
 
 void SetSoundVariables(void);

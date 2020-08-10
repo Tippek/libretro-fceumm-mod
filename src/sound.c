@@ -51,6 +51,13 @@ static uint8 IRQFrameMode = 0;				/* $4017 / xx000000 */
 static uint8 PSG[0x10];
 static uint8 RawDALatch = 0;				/* $4011 0xxxxxxx */
 
+void(*sfun2[3]) (void);
+uint8 vpsg12[8];
+uint8 vpsg22[4];
+int32 cvbc2[3];
+int32 vcount2[3];
+int32 dcount2[2];
+
 uint8 EnabledChannels = 0;					/* Byte written to $4015 */
 
 typedef struct {
@@ -87,37 +94,44 @@ static int32 sqacc[2];
 /* LQ variables segment ends. */
 
 static int32 lengthcount[4];
-static const uint8 lengthtable[0x20] =
+static const uint8 lengthtable[0x20]=
 {
-	0x0A, 0xFE, 0x14, 0x02, 0x28, 0x04, 0x50, 0x06,
-	0xa0, 0x08, 0x3c, 0x0a, 0x0e, 0x0c, 0x1a, 0x0e,
-	0x0c, 0x10, 0x18, 0x12, 0x30, 0x14, 0x60, 0x16,
-	0xc0, 0x18, 0x48, 0x1a, 0x10, 0x1c, 0x20, 0x1E
+	10,254, 20,  2, 40,  4, 80,  6, 160,  8, 60, 10, 14, 12, 26, 14,
+	12, 16, 24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30
 };
+
 
 static const uint32 NTSCNoiseFreqTable[0x10] =
 {
-	0x004, 0x008, 0x010, 0x020, 0x040, 0x060, 0x080, 0x0A0,
-	0x0CA, 0x0FE, 0x17C, 0x1FC, 0x2FA, 0x3F8, 0x7F2, 0xFE4
+	4, 8, 16, 32, 64, 96, 128, 160, 202,
+	254, 380, 508, 762, 1016, 2034, 4068
 };
 
 static const uint32 PALNoiseFreqTable[0x10] =
 {
-	0x004, 0x008, 0x00E, 0x01E, 0x03C, 0x058, 0x076, 0x094,
-	0x0BC, 0x0EC, 0x162, 0x1D8, 0x2C4, 0x3B0, 0x762, 0xEC2
+	4, 7, 14, 30, 60, 88, 118, 148, 188,
+	236, 354, 472, 708,  944, 1890, 3778
 };
 
-static const uint32 NTSCDMCTable[0x10] =
+
+static const uint32 NTSCDMCTable[0x10]=
 {
-	0x1AC, 0x17C, 0x154, 0x140, 0x11E, 0x0FE, 0x0E2, 0x0D6,
-	0x0BE, 0x0A0, 0x08E, 0x080, 0x06A, 0x054, 0x048, 0x036
+ 428,380,340,320,286,254,226,214,
+ 190,160,142,128,106, 84 ,72,54
 };
 
-static const uint32 PALDMCTable[0x10] =
+/* Previous values for PAL DMC was value - 1,
+ * I am not certain if this is if FCEU handled
+ * PAL differently or not, the NTSC values are right,
+ * so I am assuming that the current value is handled
+ * the same way NTSC is handled. */
+
+static const uint32 PALDMCTable[0x10]=
 {
-	0x18E, 0x162, 0x13C, 0x12A, 0x114, 0x0EC, 0x0D2, 0x0C6,
-	0x0B0, 0x094, 0x084, 0x076, 0x062, 0x04E, 0x042, 0x032
+	398, 354, 316, 298, 276, 236, 210, 198,
+	176, 148, 132, 118,  98,  78,  66,  50
 };
+
 
 /* $4010  -  Frequency
  * $4011  -  Actual data outputted
@@ -271,42 +285,45 @@ static DECLFW(Write_PSG) {
 	PSG[A] = V;
 }
 int dmc7bfl;
-static DECLFW(Write_DMCRegs) {
-/*  FCEU_printf("APU1 %04x:%04x\n",A,V); */
-	A &= 0xF;
-
-	switch (A) {
-	case 0x00: DoPCM();
-		LoadDMCPeriod(V & 0xF);
-
-		if (SIRQStat & 0x80) {
-			if (!(V & 0x80)) {
+static DECLFW(Write_DMCRegs)
+{
+	A&=0xF;
+	
+	switch(A)
+	{
+	case 0x00:
+		DoPCM();
+	    LoadDMCPeriod(V&0xF);
+	
+	    if(SIRQStat&0x80)
+	    {
+			if(!(V&0x80))
+			{
 				X6502_IRQEnd(FCEU_IQDPCM);
-				SIRQStat &= ~0x80;
-			} else X6502_IRQBegin(FCEU_IQDPCM);
-		}
-		DMCFormat = V;
+				SIRQStat&=~0x80;
+			}
+			else X6502_IRQBegin(FCEU_IQDPCM);
+	    }
+		DMCFormat=V;
 		break;
-	case 0x01: DoPCM();
-		RawDALatch = V & 0x7F;
-      if (RawDALatch)
-	  {
-		  DMC_7bit = 1;
-
-		  totalscanlines = 240; //mod: improved fix
-
-	  }
+	case 0x01:
+		DoPCM();
+		RawDALatch=V&0x7F;
+		//RawDALatch=InitialRawDALatch;
+		if (RawDALatch) {
+			DMC_7bit = 1; totalscanlines = 240;
+		}
 		break;
 	case 0x02:
-      DMCAddressLatch = V;
-      if (V)
+		DMCAddressLatch=V;
+		if (V)
 			DMC_7bit = 0;
-      break;
+		break;
 	case 0x03:
-      DMCSizeLatch = V;
-      if (V)
+		DMCSizeLatch=V;
+		if (V)
 			DMC_7bit = 0;
-      break;
+		break;
 	}
 }
 
@@ -469,8 +486,10 @@ static INLINE void tester(void) {
 	}
 }
 
-static INLINE void DMCDMA(void) {
-	if (DMCSize && !DMCHaveDMA) {
+static INLINE void DMCDMA(void)
+{
+  if(DMCSize && !DMCHaveDMA)
+  {
 	  if(!nwram)
 	  {
    X6502_DMR(0x8000+DMCAddress);
@@ -482,24 +501,29 @@ static INLINE void DMCDMA(void) {
 	  }
 	  else
 	  {
-   X6502_DMR(DMCAddress);
-   X6502_DMR(DMCAddress);
-   X6502_DMR(DMCAddress);
-   DMCDMABuf=X6502_DMR(DMCAddress);
+   X6502_DMR2(DMCAddress);
+   X6502_DMR2(DMCAddress);
+   X6502_DMR2(DMCAddress);
+   DMCDMABuf=X6502_DMR2(DMCAddress);
    DMCHaveDMA=1;
-   DMCAddress=(DMCAddress+1)&0x7fff;
+   DMCAddress=(DMCAddress+1);
 	  }
-		DMCSize--;
-		if (!DMCSize) {
-			if (DMCFormat & 0x40)
-				PrepDPCM();
-			else {
-				SIRQStat |= 0x80;
-				if (DMCFormat & 0x80)
-					X6502_IRQBegin(FCEU_IQDPCM);
-			}
-		}
+   DMCSize--;
+   if(!DMCSize)
+   {
+    if(DMCFormat&0x40)
+     PrepDPCM();
+    else
+    {
+       SIRQStat|=0x80;
+     if(DMCFormat&0x80)
+	  {
+	
+      X6502_IRQBegin(FCEU_IQDPCM);
+    }
 	}
+   }
+ }
 }
 
 void FASTAPASS(1) FCEU_SoundCPUHook(int cycles) {
@@ -918,14 +942,7 @@ DECLFW(Write_IRQFM) {
 	IRQFrameMode = V;
 }
 
-void SetNESSoundMap(void) {
-	SetWriteHandler(0x4000, 0x400F, Write_PSG);
-	SetWriteHandler(0x4010, 0x4013, Write_DMCRegs);
-	SetWriteHandler(0x4017, 0x4017, Write_IRQFM);
 
-	SetWriteHandler(0x4015, 0x4015, StatusWrite);
-	SetReadHandler(0x4015, 0x4015, StatusRead);
-}
 
 static int32 inbuf = 0;
 int FlushEmulateSound(void) {
@@ -1129,7 +1146,220 @@ void FCEUI_SetSoundVolume(uint32 volume) {
 	FSettings.SoundVolume = volume;
 }
 
+static void DoSQV1(void);
+static void DoSQV2(void);
+static void DoSawV(void);
 
+static INLINE void DoSQV(int x) {
+	int32 V;
+	int32 amp = (((vpsg12[x << 2] & 15) << 8) * 6 / 8) >> 4;
+	int32 start, end;
+
+	start = cvbc2[x];
+	end = (SOUNDTS << 16) / soundtsinc;
+	if (end <= start) return;
+	cvbc2[x] = end;
+
+	if (vpsg12[(x << 2) | 0x2] & 0x80) {
+		if (vpsg12[x << 2] & 0x80) {
+			for (V = start; V < end; V++)
+				Wave[V >> 4] += amp;
+		} else {
+			int32 thresh = (vpsg12[x << 2] >> 4) & 7;
+			int32 freq = ((vpsg12[(x << 2) | 0x1] | ((vpsg12[(x << 2) | 0x2] & 15) << 8)) + 1) << 17;
+			for (V = start; V < end; V++) {
+				if (dcount2[x] > thresh)
+					Wave[V >> 4] += amp;
+				vcount2[x] -= nesincsize;
+				while (vcount2[x] <= 0) {
+					vcount2[x] += freq;
+					dcount2[x] = (dcount2[x] + 1) & 15;
+				}
+			}
+		}
+	}
+}
+
+static void DoSQV1(void) {
+	DoSQV(0);
+}
+
+static void DoSQV2(void) {
+	DoSQV(1);
+}
+
+static void DoSawV(void) {
+	int V;
+	int32 start, end;
+
+	start = cvbc2[2];
+	end = (SOUNDTS << 16) / soundtsinc;
+	if (end <= start) return;
+	cvbc2[2] = end;
+
+	if (vpsg22[2] & 0x80) {
+		static int32 saw1phaseacc = 0;
+		uint32 freq3;
+		static uint8 b3 = 0;
+		static int32 phaseacc = 0;
+		static uint32 duff = 0;
+
+		freq3 = (vpsg22[1] + ((vpsg22[2] & 15) << 8) + 1);
+
+		for (V = start; V < end; V++) {
+			saw1phaseacc -= nesincsize;
+			if (saw1phaseacc <= 0) {
+				int32 t;
+ rea:
+				t = freq3;
+				t <<= 18;
+				saw1phaseacc += t;
+				phaseacc += vpsg22[0] & 0x3f;
+				b3++;
+				if (b3 == 7) {
+					b3 = 0;
+					phaseacc = 0;
+				}
+				if (saw1phaseacc <= 0)
+					goto rea;
+				duff = (((phaseacc >> 3) & 0x1f) << 4) * 6 / 8;
+			}
+			Wave[V >> 4] += duff;
+		}
+	}
+}
+
+static INLINE void DoSQVHQ(int x) {
+	int32 V;
+	int32 amp = ((vpsg12[x << 2] & 15) << 8) * 6 / 8;
+
+	if (vpsg12[(x << 2) | 0x2] & 0x80) {
+		if (vpsg12[x << 2] & 0x80) {
+			for (V = cvbc2[x]; V < (int)SOUNDTS; V++)
+				WaveHi[V] += amp;
+		} else {
+			int32 thresh = (vpsg12[x << 2] >> 4) & 7;
+			for (V = cvbc2[x]; V < (int)SOUNDTS; V++) {
+				if (dcount2[x] > thresh)
+					WaveHi[V] += amp;
+				vcount2[x]--;
+				if (vcount2[x] <= 0) {
+					vcount2[x] = (vpsg12[(x << 2) | 0x1] | ((vpsg12[(x << 2) | 0x2] & 15) << 8)) + 1;
+					dcount2[x] = (dcount2[x] + 1) & 15;
+				}
+			}
+		}
+	}
+	cvbc2[x] = SOUNDTS;
+}
+
+static void DoSQV1HQ(void) {
+	DoSQVHQ(0);
+}
+
+static void DoSQV2HQ(void) {
+	DoSQVHQ(1);
+}
+
+static void DoSawVHQ(void) {
+	static uint8 b3 = 0;
+	static int32 phaseacc = 0;
+	int32 V;
+
+	if (vpsg22[2] & 0x80) {
+		for (V = cvbc2[2]; V < (int)SOUNDTS; V++) {
+			WaveHi[V] += (((phaseacc >> 3) & 0x1f) << 8) * 6 / 8;
+			vcount2[2]--;
+			if (vcount2[2] <= 0) {
+				vcount2[2] = (vpsg22[1] + ((vpsg22[2] & 15) << 8) + 1) << 1;
+				phaseacc += vpsg22[0] & 0x3f;
+				b3++;
+				if (b3 == 7) {
+					b3 = 0;
+					phaseacc = 0;
+				}
+			}
+		}
+	}
+	cvbc2[2] = SOUNDTS;
+}
+
+static SFORMAT SStateRegs[] =
+{
+	{ vpsg12, 8, "PSG1" },
+	{ vpsg22, 4, "PSG2" },
+	{ 0 }
+};
+void VRC6Sound2(int Count) {
+	int x;
+
+	DoSQV1();
+	DoSQV2();
+	DoSawV();
+	for (x = 0; x < 3; x++)
+		cvbc2[x] = Count;
+}
+
+void VRC6Sound2HQ2(void) {
+	DoSQV1HQ();
+	DoSQV2HQ();
+	DoSawVHQ();
+}
+
+void VRC6SyncHQ2(int32 ts) {
+	int x;
+	for (x = 0; x < 3; x++) cvbc2[x] = ts;
+}
+void VRC6_ESI(void) {
+	GameExpSound.RChange = VRC6_ESI;
+	GameExpSound.Fill = VRC6Sound2;
+	GameExpSound.HiFill = VRC6Sound2HQ2;
+	GameExpSound.HiSync = VRC6SyncHQ2;
+
+	memset(cvbc2, 0, sizeof(cvbc2));
+	memset(vcount2, 0, sizeof(vcount2));
+	memset(dcount2, 0, sizeof(dcount2));
+//	if (FSettings.SndRate) {
+		if (FSettings.soundq >= 1) {
+			sfun2[0] = DoSQV1HQ;
+			sfun2[1] = DoSQV2HQ;
+			sfun2[2] = DoSawVHQ;
+		} else {
+			sfun2[0] = DoSQV1;
+			sfun2[1] = DoSQV2;
+			sfun2[2] = DoSawV;
+		}
+//	} else
+//		memset(sfun2, 0, sizeof(sfun2));
+	AddExState(&SStateRegs, ~0, 0, 0);
+}
+static DECLFW(VRC6SW) {
+	//A &= 0xF003;
+	 if(A>=0x4040 && A<=0x4042)
+        {
+		vpsg12[A & 3] = V;
+		if (sfun2[0]) sfun2[0]();
+	}  else if(A>=0x4050 && A<=0x4052) {
+		vpsg12[4 | (A & 3)] = V;
+		if (sfun2[1]) sfun2[1]();
+	} else if(A>=0x4060 && A<=0x4062) {
+		vpsg22[A & 3] = V;
+		if (sfun2[2]) sfun2[2]();
+	}
+}
+void SetNESSoundMap(void) {
+	SetWriteHandler(0x4000, 0x400F, Write_PSG);
+	SetWriteHandler(0x4010, 0x4013, Write_DMCRegs);
+	SetWriteHandler(0x4017, 0x4017, Write_IRQFM);
+
+	SetWriteHandler(0x4015, 0x4015, StatusWrite);
+	SetReadHandler(0x4015, 0x4015, StatusRead);
+	  if(vrc6_snd)
+		{
+		  SetWriteHandler(0x4040, 0x4070, VRC6SW);
+		  VRC6_ESI();
+		}
+}
 SFORMAT FCEUSND_STATEINFO[] = {
 	{ &fhcnt, 4 | FCEUSTATE_RLSB, "FHCN" },
 	{ &fcnt, 1, "FCNT" },
