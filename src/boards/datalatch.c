@@ -21,11 +21,29 @@
 #include "mapinc.h"
 #include "../ines.h"
 
+#include "../x6502.h"
 static uint8 latche, latcheinit, bus_conflict;
 static uint16 addrreg0, addrreg1;
 static uint8 *WRAM = NULL;
 static uint32 WRAMSIZE;
+uint8 current_aorom_bank;
 static void (*WSync)(void);
+uint16 fake_bank;
+void B40B0(int V)
+{
+FCEUD_Message("Bank switched!");
+	//if(!extra_bank_unrom)
+	{
+		//	SetReadHandler(0x8000, 0xFFFF,CartBR_ex);
+		extra_bank_unrom = 1;
+	}
+	fake_bank = V;
+	//setprg32_ex(0x8000, V);
+	//	setprg32(0x8000, V & 0xF);
+}
+static DECLFW(b40bxx) {
+	B40B0(V);
+}
 
 static DECLFW(LatchWrite) {
 /*	FCEU_printf("bs %04x %02x\n",A,V); */
@@ -55,9 +73,10 @@ static void LatchPower(void) {
 	} else {
 		SetReadHandler(0x8000, 0xFFFF, CartBR);
 	}
-	SetWriteHandler(0x5020, addrreg1, LatchWrite);
+	SetWriteHandler(0x8000, addrreg1, LatchWrite);
 	if(nwram)
 	{
+		SetWriteHandler(0x40B0, 0x40B0, b40bxx);
  SetWriteHandler(0x5000, 0x7FFF, AWWRAM);
  SetReadHandler(0x5000, 0x7FFF, ARWRAM);
  AddExState(WRAM2, 0x3000, 0, "WRMM");
@@ -90,7 +109,7 @@ static void Latch_Init(CartInfo *info, void (*proc)(void), uint8 init, uint16 ad
 		{
 			if(!nwram)
 			{
-			WRAMSIZE = 8192;
+			WRAMSIZE = 0x3000;
 			WRAM = (uint8*)FCEU_gmalloc(WRAMSIZE);
 			SetupCartPRGMapping(0x10, WRAM, WRAMSIZE, 1);
 			}
@@ -100,6 +119,7 @@ static void Latch_Init(CartInfo *info, void (*proc)(void), uint8 init, uint16 ad
 			}
 			AddExState(WRAM, WRAMSIZE, 0, "WRAM");
 		}
+		
 	}
 	AddExState(&latche, 1, 0, "LATC");
 	AddExState(&bus_conflict, 1, 0, "BUSC");
@@ -120,8 +140,8 @@ static void NROMPower(void) {
 	setprg16(0xC000, ~0);
 	setchr8(0);
 
-	SetReadHandler(0x6000, 0x7FFF, CartBR);
-	SetWriteHandler(0x6000, 0x7FFF, CartBW);
+	SetReadHandler(0x5000, 0x7FFF, CartBR);
+	SetWriteHandler(0x5000, 0x7FFF, CartBW);
 	SetReadHandler(0x8000, 0xFFFF, CartBR);
 
 	FCEU_CheatAddRAM(WRAMSIZE >> 10, 0x6000, WRAM);
@@ -132,8 +152,7 @@ static void NROMPower(void) {
 }
 
 void NROM_Init(CartInfo *info) {
-	info->Power = NROMPower;
-	info->Close = LatchClose;
+
 
 	WRAMSIZE = 8192;
 	WRAM = (uint8*)FCEU_gmalloc(WRAMSIZE);
@@ -143,28 +162,23 @@ void NROM_Init(CartInfo *info) {
 		info->SaveGameLen[0] = WRAMSIZE;
 	}
 	AddExState(WRAM, WRAMSIZE, 0, "WRAM");
+		info->Power = NROMPower;
+	info->Close = LatchClose;
 }
 
 /*------------------ Map 2 ---------------------------*/
 
 static void UNROMSync(void) {
-#if 0
-	static uint32 mirror_in_use = 0;
-	if (PRGsize[0] <= 128 * 1024) {
-		setprg16(0x8000, latche & 0x7);
-		if ((latche & 0xF8) == 0x08) mirror_in_use = 1;
-		if (mirror_in_use)
-			setmirror(((latche >> 3) & 1) ^ 1);	/* Higway Star Hacked mapper to be redefined to another mapper */
-	} else
-#endif
-	setprg8r(0x10, 0x6000, 0);
+
+
 	setprg16(0x8000, latche);
 	setprg16(0xc000, ~0);
 	setchr8(0);
 }
 
 void UNROM_Init(CartInfo *info) {
-	Latch_Init(info, UNROMSync, 0, 0x8000, 0xFFFF, 1, 0);
+	SetWriteHandler(0x40B0, 0x40B0, b40bxx);
+	Latch_Init(info, UNROMSync, 0, 0x8000, 0xFFFF, 0, 1);
 }
 
 /*------------------ Map 3 ---------------------------*/
@@ -199,25 +213,41 @@ void CNROM_Init(CartInfo *info) {
 
 /*------------------ Map 7 ---------------------------*/
 
-static void ANROMSync(void) {
+static void ANROMSync() {
 	if(!anbanks)
 	{
+	current_aorom_bank = latche & 0xF;
 	setprg32(0x8000, latche & 0xF);
+	if (extra_bank_unrom)
+	{
+		fake_bank = latche & 0xF;
+	}
 	setmirror(MI_0 + ((latche >> 4) & 1));
 	setchr8(0);
 	}
 	else
 	{
+	current_aorom_bank = latche & 0x7F;
 	setprg32(0x8000, latche & 0x7F);
+	if (extra_bank_unrom)
+	{
+		fake_bank = latche & 0x7F;
+	}
 	setmirror(MI_0 + ((latche >> 7) & 1));
 	setchr8(0);
 	}
+
 }
 
 void ANROM_Init(CartInfo *info) {
-	Latch_Init(info, ANROMSync, 0, 0x5020, 0xFFFF, 0, 0);
+ Latch_Init(info, ANROMSync, 0, 0x8000, 0xFFFF, 0, 0);
+ extra_bank_unrom = 0;
+ fake_bank = 0xF;
+SetWriteHandler(0x40B0, 0x40B0, b40bxx);
+ AddExState(&fake_bank, 1, 0, "FAKE");
+ AddExState(&extra_bank_unrom, 1, 0, "Exbk");
+ AddExState(&current_aorom_bank, 1, 0, "Exbk");
 }
-
 /*------------------ Map 8 ---------------------------*/
 
 static void M8Sync(void) {

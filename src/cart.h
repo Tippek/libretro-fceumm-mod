@@ -25,7 +25,7 @@ typedef struct {
 					 */
 } CartInfo;
 
-extern uint8 *Page[256], *MMC5SPRVPage[32], *MMC5BGVPage[32];
+extern uint8 *Page[32], *MMC5SPRVPage[32], *MMC5BGVPage[32];
 extern uint8 *VPage[40];
 extern uint8 extra_ppu[0x10000]; //mod: extra video ram
 

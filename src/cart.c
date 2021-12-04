@@ -37,8 +37,8 @@
 		address space external to the NES.
 		It's also (ab)used by the NSF code.
 */
-
-uint8 *Page[256], *VPage[40];
+int extra_bank_unrom = 0;
+uint8 *Page[32], *VPage[40];
 uint8 **VPageR = VPage;
 uint8 *VPageG[40];
 uint8 *MMC5SPRVPage[32];
@@ -94,17 +94,29 @@ static INLINE void setpageptr(int s, uint32 A, uint8 *p, int ram) {
 
 static uint8 nothing[8192];
 static uint8 nothing2[8192*5];
+static uint8 nothing3[8192*8];
 void ResetCartMapping(void) {
 	int x;
 
+
+
+	for (x = 0; x < 32; x++) {
+
+		CHRptr[x] = 0;
+		 CHRsize[x] = 0;
+	}
 	for (x = 0; x < 32; x++) {
 		Page[x] = nothing - x * 2048;
-		PRGptr[x] = CHRptr[x] = 0;
-		PRGsize[x] = CHRsize[x] = 0;
+		PRGptr[x] = 0;
+		PRGsize[x] = 0;
 	}
-	for (x = 0; x < 8; x++) {
-		MMC5SPRVPage[x] = MMC5BGVPage[x] = VPageR[x] = nothing - 0x400 * x;
+
+	for (x = 0; x <32; x++) {
+		MMC5SPRVPage[x] = MMC5BGVPage[x] = nothing2- 0x400 * x;
+
+		VPageR[x]= VPage[x] = nothing2 - 0x400 * x;
 	}
+
 }
 
 void SetupCartPRGMapping(int chip, uint8 *p, uint32 size, int ram) {
@@ -312,71 +324,172 @@ void FASTAPASS(3) setntamem(uint8 * p, int ram, uint32 b) {
 	if (ram)
 		PPUNTARAM |= 1 << b;
 }
-uint8 lul[2000];
+uint8 tmp_null[2];
 static int mirrorhard = 0;
 void setmirrorw(int a, int b, int c, int d) {
-	
 	FCEUPPU_LineUpdate();
-	
-			if(wscre)
+		if(wscre)
 		{
 			vnapage[0] =  NTARAM; vnapage[1] = NTARAM + 0x400;
 			vnapage2[0] = NTARAM2; vnapage2[1] = NTARAM2 + 0x400;
-			vnapage[2] = vnapage2[2] = vnapage[3] = vnapage2[3] = lul;
+			vnapage3[0] = NTARAM3; vnapage3[1] = NTARAM3 + 0x400;
+			vnapage[2] = vnapage2[2] = vnapage[3] = vnapage2[3] = vnapage3[2] = vnapage3[3] = tmp_null;
+			if (wscre_32==0x3FF)
+			{
+				vnapage[0] = NTARAM + a * 0x400;
+				vnapage[1] = NTARAM + b * 0x400;
+				vnapage[2] = NTARAM + c * 0x400;
+				vnapage[3] = NTARAM + d * 0x400;
+
+			}
+			if (wscre_32_2_3 == 0x3FF)
+			{
+				vnapage2[1] = vnapage2[0];
+				vnapage3[1] = vnapage3[0];
+			}
 			return;
 	}
+	{
 	vnapage[0] = NTARAM + a * 0x400;
 	vnapage[1] = NTARAM + b * 0x400;
 	vnapage[2] = NTARAM + c * 0x400;
 	vnapage[3] = NTARAM + d * 0x400;
+	}
 	vnapage2[0] = NTARAM2 + a * 0x400;
 	vnapage2[1] = NTARAM2 + b * 0x400;
 	vnapage2[2] = NTARAM2 + c * 0x400;
 	vnapage2[3] = NTARAM2 + d * 0x400;
+	vnapage3[0] = NTARAM3 + a * 0x400;
+	vnapage3[1] = NTARAM3 + b * 0x400;
+	vnapage3[2] = NTARAM3 + c * 0x400;
+	vnapage3[3] = NTARAM3 + d * 0x400;
 }
 
-void FASTAPASS(1) setmirror(int t) {
+void setmirror(int t) {
 	FCEUPPU_LineUpdate();
-			if(wscre)
+	if(wscre)
 		{
 			vnapage[0] =  NTARAM; vnapage[1] = NTARAM + 0x400;
 			vnapage2[0] = NTARAM2; vnapage2[1] = NTARAM2 + 0x400;
-			vnapage[2] = vnapage2[2] = vnapage[3] = vnapage2[3] = lul;
+			vnapage3[0] = NTARAM3; vnapage3[1] = NTARAM3 + 0x400;
+			vnapage[2] = vnapage2[2] = vnapage[3] = vnapage2[3] = vnapage3[2] = vnapage3[3] = tmp_null;
+			if (wscre_32 == 0x3FF)
+			{
+
+				switch (t) {
+				case MI_H:
+
+					vnapage[0] = vnapage[1] = NTARAM; vnapage[2] = vnapage[3] = NTARAM + 0x400;
+					vnapage3[0] = vnapage3[1] = NTARAM3; vnapage3[2] = vnapage3[3] = NTARAM3 + 0x400;
+					vnapage2[0] = vnapage2[1] = NTARAM2; vnapage2[2] = vnapage2[3] = NTARAM2 + 0x400;
+					break;
+				case MI_V:
+
+					vnapage[0] = vnapage[2] = NTARAM; vnapage[1] = vnapage[3] = NTARAM + 0x400;
+					vnapage2[0] = vnapage2[2] = NTARAM2; vnapage2[1] = vnapage2[3] = NTARAM2 + 0x400;
+					vnapage3[0] = vnapage3[2] = NTARAM3; vnapage3[1] = vnapage3[3] = NTARAM3 + 0x400;
+					break;
+				case MI_0:
+					vnapage[0] = vnapage[1] = vnapage[2] = vnapage[3] = NTARAM;
+					vnapage2[0] = vnapage2[1] = vnapage2[2] = vnapage2[3] = NTARAM2;
+					vnapage3[0] = vnapage3[1] = vnapage3[2] = vnapage3[3] = NTARAM3;
+					break;
+				case MI_1:
+					vnapage[0] = vnapage[1] = vnapage[2] = vnapage[3] = NTARAM + 0x400;
+					vnapage2[0] = vnapage2[1] = vnapage2[2] = vnapage2[3] = NTARAM2 + 0x400;
+					vnapage3[0] = vnapage3[1] = vnapage3[2] = vnapage3[3] = NTARAM3 + 0x400;
+					break;
+				}
+				
+
+			}
+			if (wscre_32_2_3 == 0x3FF)
+			{
+				vnapage2[1] = vnapage2[0];
+				vnapage3[1] = vnapage3[0];
+			}
 			return;
 	}
 	if (!mirrorhard) {
 		switch (t) {
 		case MI_H:
+
 			vnapage[0] = vnapage[1] = NTARAM; vnapage[2] = vnapage[3] = NTARAM + 0x400;
+			vnapage3[0] = vnapage3[1] = NTARAM3; vnapage3[2] = vnapage3[3] = NTARAM3 + 0x400;
 			vnapage2[0] = vnapage2[1] = NTARAM2; vnapage2[2] = vnapage2[3] = NTARAM2 + 0x400;
 			break;
 		case MI_V:
+	
 			vnapage[0] = vnapage[2] = NTARAM; vnapage[1] = vnapage[3] = NTARAM + 0x400;
 			vnapage2[0] = vnapage2[2] = NTARAM2; vnapage2[1] = vnapage2[3] = NTARAM2 + 0x400;
+			vnapage3[0] = vnapage3[2] = NTARAM3; vnapage3[1] = vnapage3[3] = NTARAM3 + 0x400;
 			break;
 		case MI_0:
 			vnapage[0] = vnapage[1] = vnapage[2] = vnapage[3] = NTARAM;
 			vnapage2[0] = vnapage2[1] = vnapage2[2] = vnapage2[3] = NTARAM2;
+			vnapage3[0] = vnapage3[1] = vnapage3[2] = vnapage3[3] = NTARAM3;
 			break;
 		case MI_1:
 			vnapage[0] = vnapage[1] = vnapage[2] = vnapage[3] = NTARAM + 0x400;
 			vnapage2[0] = vnapage2[1] = vnapage2[2] = vnapage2[3] = NTARAM2 + 0x400;
+			vnapage3[0] = vnapage3[1] = vnapage3[2] = vnapage3[3] = NTARAM3 + 0x400;
 			break;
 		}
 		PPUNTARAM = 0xF;
 	}
 }
 
-void SetupCartMirroring(int m, int hard, uint8 *extra) {
+
+void SetupCartMirroring(int m, int hard, uint8* extra) {
 	if (m < 4) {
 		mirrorhard = 0;
 		setmirror(m);
-	} else {
+	}
+	else {
 		vnapage[0] = NTARAM;
 		vnapage[1] = NTARAM + 0x400;
+		vnapage3[0] = NTARAM3;
+		vnapage3[1] = NTARAM3 + 0x400;
 		vnapage[2] = extra;
 		vnapage[3] = extra + 0x400;
 		PPUNTARAM = 0xF;
+		if (wscre_32 == 0x3FF)
+		{
+			switch (m) {
+			case MI_H:
+
+				vnapage[0] = vnapage[1] = NTARAM; vnapage[2] = vnapage[3] = NTARAM + 0x400;
+				vnapage3[0] = vnapage3[1] = NTARAM3; vnapage3[2] = vnapage3[3] = NTARAM3 + 0x400;
+				vnapage2[0] = vnapage2[1] = NTARAM2; vnapage2[2] = vnapage2[3] = NTARAM2 + 0x400;
+				break;
+			case MI_V:
+
+				vnapage[0] = vnapage[2] = NTARAM; vnapage[1] = vnapage[3] = NTARAM + 0x400;
+				vnapage2[0] = vnapage2[2] = NTARAM2; vnapage2[1] = vnapage2[3] = NTARAM2 + 0x400;
+				vnapage3[0] = vnapage3[2] = NTARAM3; vnapage3[1] = vnapage3[3] = NTARAM3 + 0x400;
+				break;
+			case MI_0:
+				vnapage[0] = vnapage[1] = vnapage[2] = vnapage[3] = NTARAM;
+				vnapage2[0] = vnapage2[1] = vnapage2[2] = vnapage2[3] = NTARAM2;
+				vnapage3[0] = vnapage3[1] = vnapage3[2] = vnapage3[3] = NTARAM3;
+				break;
+			case MI_1:
+				vnapage[0] = vnapage[1] = vnapage[2] = vnapage[3] = NTARAM + 0x400;
+				vnapage2[0] = vnapage2[1] = vnapage2[2] = vnapage2[3] = NTARAM2 + 0x400;
+				vnapage3[0] = vnapage3[1] = vnapage3[2] = vnapage3[3] = NTARAM3 + 0x400;
+				break;
+			}
+
+
+		}
+		if (wscre_32_2_3 == 0x3FF)
+		{
+			vnapage2[1] = vnapage2[0];
+			vnapage3[1] = vnapage3[0];
+		}
+
+
+
 	}
 	mirrorhard = hard;
 }

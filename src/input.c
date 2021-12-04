@@ -198,7 +198,7 @@ static uint8 FP_FASTAPASS(1) ReadGP(int w) {
 	else
 		ret = ((joy[w] >> (joy_readbit[w])) & 1);
 	if (joy_readbit[w] >= 16) ret = 0;
-	if (FSDisable) {
+	if (0) {
 		if (joy_readbit[w] >= 8)
 			ret |= 1;
 	} else {

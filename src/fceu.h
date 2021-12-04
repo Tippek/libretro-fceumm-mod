@@ -13,11 +13,9 @@ extern unsigned DMC_7bit;
 extern unsigned totalscanlines;
 extern unsigned normal_scanlines;
 extern unsigned extrascanlines;
-extern unsigned vblankscanlines;
+extern int vblines;
 extern int sprites256;
 extern int vt03_mmc3_flag;
-extern int exscanlines;
-extern int vblines;
 extern int vt03_mode;
 
 /* Region selection */

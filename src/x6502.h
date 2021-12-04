@@ -23,6 +23,12 @@
 
 #include "x6502struct.h"
 
+extern uint8 romdata[0x4000 * 0x200];
+//the opsize table is used to quickly grab the instruction sizes (in bytes)
+extern int extra_bank_unrom;
+extern uint16 fake_bank;
+extern uint8 current_aorom_bank;
+
 #ifdef FCEUDEF_DEBUGGER
 void X6502_Debug(void (*CPUHook)(X6502 *),
 				 uint8 (*ReadHook)(X6502 *, uint32),
@@ -42,8 +48,10 @@ extern uint8 stopclock; //mod: freeze timestamp by $401C
 extern int vt03_mmc3_flag; //mod: special flag for 4bpp tiles for mmc3. TODO: optimize?
 extern int newopcodes; //mod: new opcodes
 extern uint32 sound_timestamp;
+extern int exscanlines;
+extern int vblankscanlines;
 extern X6502 X;
-
+extern void B40B0(int V);
 #define N_FLAG  0x80
 #define V_FLAG  0x40
 #define U_FLAG  0x20
@@ -76,7 +84,7 @@ void TriggerNMI(void);
 void TriggerNMI2(void);
 
 uint8 FASTAPASS(1) X6502_DMR(uint32 A);
-uint8 FASTAPASS(1) X6502_DMR2(uint32 A);
+uint8 FASTAPASS(1) X6502_DMR2(uint32 A, uint16 B);
 void FASTAPASS(2) X6502_DMW(uint32 A, uint8 V);
 void FASTAPASS(2) X6502_ADDCYC(uint32 A);
 void FASTAPASS(2) X6502_DMW2(uint32 A, uint8 V);

@@ -155,6 +155,22 @@ static char DMCHaveDMA = 0;
 static uint8 DMCDMABuf = 0;
 static char DMCHaveSample = 0;
 
+
+
+int32 DACacc = 1;
+static uint32 DACPeriod;
+static uint8 DACSizeLo, DACSizeHi;
+uint16 DACSize;
+uint8 DACAddressLo, DACAddressHi;
+uint8 DACFreqLo, DACFreqHi;
+uint16 DACFreq;
+uint16 DACAddress; /* writes to 4012 and 4013 */
+uint8 DACRam[0x10000];
+static uint8 DACFormat;	/* Write to $4010 */
+static uint8 DACHaveDMA;
+static uint8 DACDMABuf = 0;
+static uint8 DACHaveSample;
+
 static void Dummyfunc(void) { };
 static void (*DoNoise)(void) = Dummyfunc;
 static void (*DoTriangle)(void) = Dummyfunc;
@@ -170,13 +186,32 @@ static void LoadDMCPeriod(uint8 V) {
 	else
 		DMCPeriod = NTSCDMCTable[V];
 }
+static void LoadDACPeriod(uint8 V)
+{
 
+	if (PAL)
+		DACPeriod = PALDMCTable[V];
+	else
+		DACPeriod = NTSCDMCTable[V];
+
+	DACFreq = DACFreqLo + (DACFreqHi << 8);
+	if (DACFreq)
+		DACPeriod = 1789773 / DACFreq;
+}
 static void PrepDPCM() {
 	DMCAddress = 0x4000 + (DMCAddressLatch << 6);
 	 if(nwram) DMCAddress += 0x1000;
 	DMCSize = (DMCSizeLatch << 4) + 1;
 }
+static void PrepDAC()
+{
+	DACAddress = DACAddressLo + (DACAddressHi << 8);
 
+	DACSize = DACSizeLo + (DACSizeHi << 8);
+	for (int x = DACAddress; x < (DACAddress + DACSize); x++)
+		DACRam[x] = X6502_DMR2(x, 0);
+	//printf("Prepare DAC, Address: %04x, Size: %04x\n", DACAddress, DACSize);
+}
 /* Instantaneous?  Maybe the new freq value is being calculated all of the time... */
 
 static int FASTAPASS(2) CheckFreq(uint32 cf, uint8 sr) {
@@ -327,6 +362,50 @@ static DECLFW(Write_DMCRegs)
 	}
 }
 
+static DECLFW(Write_DACRegs)		//4100 regs
+{
+	A &= 0xF;
+	//printf("DAC register get wrote, Address: %04x, Value: %04x\n", A, V);
+	switch (A)
+	{
+	case 0x00:DoPCM();
+		LoadDACPeriod(V & 0xF);
+		if (!(V & 0x10))
+			PrepDAC();
+		else DACSize = 0;
+		if (SIRQStat & 0x80)
+		{
+			if ((V & 0xC0) != 0x80)
+			{
+				X6502_IRQEnd(FCEU_IQDPCM);
+				SIRQStat &= ~0x80;
+			}
+		}
+		DACFormat = V;
+		break;
+	case 0x01:DoPCM();
+		RawDALatch = V & 0x7F;
+		//    if(RawDALatch && !weneedfix)DMC_7bit = 1; 
+
+		//	if(!weneedfix)dendyline=1;}
+			//else{razgon=0;}
+		break;
+	case 0x02:DACAddressLo = V;
+
+		break;
+	case 0x03:DACAddressHi = V;
+		break;
+	case 0x04:DACSizeLo = V;
+		break;
+	case 0x05:DACSizeHi = V;
+		break;
+	case 0x06:DACFreqLo = V;
+		break;
+	case 0x07:DACFreqHi = V;
+		break;
+	}
+
+}
 static DECLFW(StatusWrite) {
 	int x;
 /*  FCEU_printf("APU1 %04x:%04x\n",A,V); */
@@ -501,10 +580,10 @@ static INLINE void DMCDMA(void)
 	  }
 	  else
 	  {
-   X6502_DMR2(DMCAddress);
-   X6502_DMR2(DMCAddress);
-   X6502_DMR2(DMCAddress);
-   DMCDMABuf=X6502_DMR2(DMCAddress);
+   X6502_DMR2(DMCAddress, 0);
+   X6502_DMR2(DMCAddress, 0);
+   X6502_DMR2(DMCAddress, 0);
+   DMCDMABuf=X6502_DMR2(DMCAddress, 0);
    DMCHaveDMA=1;
    DMCAddress=(DMCAddress+1);
 	  }
@@ -525,7 +604,39 @@ static INLINE void DMCDMA(void)
    }
  }
 }
+static INLINE void DACDMA(void)
+{
+	if (DACSize && !DACHaveDMA)
+	{
 
+
+		DACDMABuf = DACRam[DACAddress];
+
+		//  DACDMABuf=X6502_DMR(DACAddress);
+		//  DACDMABuf=X6502_DMR(DACAddress);
+		//  DACDMABuf=X6502_DMR(DACAddress);
+		//  DACDMABuf=X6502_DMR(DACAddress);
+		 //  printf("Dac buffer, Address: %04x, Value: %02x\n", DACAddress, DACDMABuf);
+		
+		DACHaveDMA = 1;
+		DACAddress++;
+
+		DACSize--;
+		if (!DACSize)
+		{
+			if (DACFormat & 0x40)
+				PrepDAC();
+			else
+			{
+				if (DACFormat & 0x80)
+				{
+					SIRQStat |= 0x80;
+					X6502_IRQBegin(FCEU_IQDPCM);
+				}
+			}
+		}
+	}
+}
 void FASTAPASS(1) FCEU_SoundCPUHook(int cycles) {
 	fhcnt -= cycles * 48;
 	if (fhcnt <= 0) {
@@ -556,6 +667,26 @@ void FASTAPASS(1) FCEU_SoundCPUHook(int cycles) {
 		DMCShift >>= 1;
 		tester();
 	}
+	 if (vrc6_snd)
+ {
+	 DACDMA();
+	 DACacc -= cycles;
+	 while (DACacc <= 0)
+	 {
+		 if (DACHaveDMA)
+		 {
+			 //   soundtsoffs+=DACacc;
+			 DoPCM();
+			 //   soundtsoffs-=DACacc;
+			 RawDALatch = DACDMABuf & 0x7F;
+			 DACHaveDMA = 0;
+			 // printf("DAC, data get for channel: %02x\n", RawDALatch);
+		 }
+
+		 DACacc += DACPeriod;
+		 //  testerDAC();
+	 }
+ }
 }
 
 void RDoPCM(void) {
@@ -1058,6 +1189,19 @@ void FCEUSND_Reset(void) {
 	DMCAddress = 0;
 	DMCSize = 0;
 	DMCShift = 0;
+	
+	DACAddressLo = 0;
+	DACAddressHi = 0;
+	DACSizeLo = 0;
+	DACSizeHi = 0;
+	DACSize = 0;
+	DACacc = 1;
+	DACPeriod = 0;
+	DACFormat = 0;
+	DACHaveDMA = 0;
+	DACDMABuf = 0;
+	DACHaveSample = 0;
+	LoadDACPeriod(DACFormat & 0xF);
 }
 
 void FCEUSND_Power(void) {
@@ -1351,7 +1495,7 @@ void SetNESSoundMap(void) {
 	SetWriteHandler(0x4000, 0x400F, Write_PSG);
 	SetWriteHandler(0x4010, 0x4013, Write_DMCRegs);
 	SetWriteHandler(0x4017, 0x4017, Write_IRQFM);
-
+  if (vrc6_snd)SetWriteHandler(0x4110, 0x4117, Write_DACRegs);
 	SetWriteHandler(0x4015, 0x4015, StatusWrite);
 	SetReadHandler(0x4015, 0x4015, StatusRead);
 	  if(vrc6_snd)
@@ -1411,6 +1555,25 @@ SFORMAT FCEUSND_STATEINFO[] = {
 	{ &DMCFormat, 1, "5FMT" },
 	{ &RawDALatch, 1, "RWDA" },
 	
+	 {DACRam, 0x10000, "6DCR"},
+  {&DACacc, 4 | FCEUSTATE_RLSB, "6ACC"},
+  {&DACAddress, 1, "6ADD"},
+  {&DACSize, 1, "6SIZ"},
+  {&DACSizeLo, 1, "6SHF"},
+  {&DACSizeHi, 1, "6SHI"},
+
+  {&DACFreq, 1, "6FRQ"},
+  {&DACFreqLo, 1, "6FRL"},
+  {&DACFreqHi, 1, "6FRH"},
+
+  {&DACHaveDMA, 1, "6HVDM"},
+  {&DACDMABuf, 1, "DACDMABuf"},
+  {&DACHaveSample, 1, "7HVSP"},
+
+  {&DACAddressLo, 1, "6SZL"},
+  {&DACAddressHi, 1, "6ADL"},
+  {&DACFormat, 1, "6FMT"},
+  
 	//these are important for smooth sound after loading state
 	{ &sqacc[0], sizeof(sqacc[0]) | FCEUSTATE_RLSB, "SAC1" },
 	{ &sqacc[1], sizeof(sqacc[1]) | FCEUSTATE_RLSB, "SAC2" },
@@ -1449,7 +1612,17 @@ void FCEUSND_LoadState(int version) {
 	LoadDMCPeriod(DMCFormat & 0xF);
 	RawDALatch &= 0x7F;
 	DMCAddress &= 0x7FFF;
+ if (vrc6_snd)
+ {
+	 LoadDACPeriod(DACFormat & 0xF);
+	 //  RawDALatch&=0x7F;
+	 //  if(!exrams)
+	 //  DACAddress&=0x7FFF;
 
+
+	 if (DACacc <= 0)
+		 DACacc = 1;
+ }
 	//minimal validation
 	for (i = 0; i < 5; i++)
 	{

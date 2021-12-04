@@ -42,6 +42,7 @@
 
 extern SFORMAT FCEUVSUNI_STATEINFO[];
 
+uint8 romdata[0x4000 * 0x200];
 uint8 *trainerpoo = NULL;
 uint8 *ROM = NULL;
 uint8 *VROM = NULL;
@@ -682,7 +683,7 @@ int iNESLoad(const char *name, FCEUFILE *fp) {
 if ((head.reserve[3] & 0x10))cpuclock = 1;
 else cpuclock = 0;						//mod: 0x0B byte, cpu clock
 
-vblines = head.reserve[4]*2; //mod: 0xC bytes - extra pre-render scanlines 
+vblankscanlines = head.reserve[4]*2; //mod: 0xC bytes - extra pre-render scanlines 
 
 if (head.reserve[5] & 1)sprites256 = 1;	//mod: new OAM engine
 
@@ -713,6 +714,21 @@ if (head.reserve[5] & 8)newopcodes = 1; //mod: LDZ TZA etc
 	if(head.reserve[6]&4)nwram = 1;
 	if(head.reserve[6]&8)anbanks = 1;
 	else anbanks = 0;
+		if (head.reserve[6] & 1)
+		{
+			wscre_new = 1;
+			wscre = 1;
+			wscre_32 = 0x3FF;
+			wscre_32_2_3 = 0x3FF;
+		}
+		else
+		{
+			wscre_new = 0;
+			wscre_32 = 0x7FF;
+			wscre_32_2_3 = 0x7FF;
+		}
+		if (head.reserve[7] & 1)wscre_32 = 0x7FF;
+		if (head.reserve[7] & 2)wscre_32_2_3 = 0x7FF;
 	if(head.reserve[6]&0x10)vrc6_snd = 1;
 	else vrc6_snd = 0;
 exscanlines = ((head.reserve[5] >> 4) * 240);
@@ -763,6 +779,9 @@ exscanlines = ((head.reserve[5] >> 4) * 240);
 	else
 		FCEU_fread(ROM, 0x4000, ROM_size, fp);
 
+	for (int x = 0; x < (ROM_size << 14); x++)
+		romdata[x] = ROM[x];
+	
 	if (VROM_size)
 		FCEU_fread(VROM, 0x2000, VROM_size, fp);
 

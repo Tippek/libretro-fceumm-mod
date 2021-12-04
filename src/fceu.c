@@ -60,10 +60,10 @@ static readfunc *AReadG;
 static writefunc *BWriteG;
 static int RWWrap = 0;
 
-static DECLFW(BNull)
-{
+static DECLFW(BNull) {
+if(A==0x40B0)
+B40B0(V);
 }
-
 static DECLFR(ANull)
 {
 	return(X.DB);

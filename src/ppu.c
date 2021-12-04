@@ -65,14 +65,62 @@ int vblines;
 int vt03_mmc3_flag;
 int vt03_mode;
 int wscre, wssub;
-static uint8 priora[512+16];
-static uint8 priora_bg[512+16];
-uint8 priora_main[256];
+int wscre_32 = 0x7FF;
+int wscre_32_2_3 = 0x7FF;
+int wscre_new = 0;
+				 
+				
+				  
+				 
+				
+				
+				  
+				 
+			  
+				 
+					
+				  
+				  
+				  
+				   
+				  
+   
+
+
+						   
+														 
+													  
+																
+																	
+														 
+
+												 
+												 
+														
+																			   
+
+								   
+								   
+
+							
+uint8 shift_bg_1 = 2;
+uint8 shift_bg_2 = 3;
+uint8 color_ful_stuff = 0x3;
+																   
+																	
+uint8 priora_bg[272+256];
+uint8 priora_main[272 + 256];
+uint8 priora_bg_3rd[272 + 256];
+uint8 priora[256+256+16];
 uint8 stopclock;
+									   
+								 
+									   
 uint8 spr_add_flag;
 uint8 spr_add_atr[0x100];
 static void Fixit1(void);
 static void Fixit12(void);
+static void Fixit13(void);
 static uint32 ppulut1[256];
 static uint32 ppulut2[256];
 static uint32 ppulut3[128];
@@ -81,8 +129,30 @@ static uint32 ppulut5[256];
 static uint32 ppulut6[256*8];
 static uint32 ppulut7[256*8];
 uint8 extra_ppu[0x10000];
+uint8 extra_ppu2[0x10000];
+						   
+							
+uint8 extra_ppu3[0x10000];
 uint8 chrramm[0x20000];
 uint8 chrambank_V[0x20];
+uint8 inc32_2nd;
+uint8 inc32_3nd;
+						   
+					   
+								  
+int ex40 = 0x40;
+int ex3f = 0x3f;
+int ex40404040 = 0x80808080;
+int test = 0;
+
+uint8 buffer_pal[256*3];
+			  
+
+
+
+						  
+
+
 static void makeppulut(void) {
 	int x;
 	int y;
@@ -97,6 +167,7 @@ static void makeppulut(void) {
 		ppulut4[x] = ppulut1[x] << 2;
 		ppulut5[x] = ppulut1[x] << 3;
 	}
+
 	  for(cc=0;cc<256;cc++)
   {
    for(xo=0;xo<8;xo++)
@@ -112,6 +183,7 @@ static void makeppulut(void) {
 //    printf("%08x\n",ppulut3[xo|(cc<<3)]);
    }
   }
+
 	for (cc = 0; cc < 16; cc++) {
 		for (xo = 0; xo < 8; xo++) {
 			ppulut3[xo | (cc << 3)] = 0;
@@ -130,6 +202,11 @@ static int ppudead = 1;
 static int kook = 0;
 int fceuindbg = 0;
 
+			 
+										
+									   
+							
+
 int MMC5Hack = 0, PEC586Hack = 0;
 uint32 MMC5HackVROMMask = 0;
 uint8 *MMC5HackExNTARAMPtr = 0;
@@ -140,9 +217,10 @@ uint8 MMC50x5130 = 0;
 uint8 MMC5HackSPScroll = 0;
 uint8 MMC5HackSPPage = 0;
 
-uint8 VRAMBuffer = 0, PPUGenLatch = 0;
+uint8 VRAMBuffer = 0, PPUGenLatch = 0, PPUGenLatch2 = 0, PPUGenLatch3 = 0;
 uint8 *vnapage[4];
 uint8 *vnapage2[4];
+uint8 *vnapage3[4];
 uint8 PPUNTARAM = 0;
 uint8 PPUCHRRAM = 0;
 
@@ -157,13 +235,21 @@ uint8 vtoggle = 0;
 uint8 XOffset = 0;
 uint8 vtoggle2 = 0;
 uint8 XOffset2 = 0;
+uint8 vtoggle3 = 0;
+				  
+				   
+uint8 XOffset3 = 0;
+																														
+
 uint32 TempAddr = 0, RefreshAddr = 0;
 uint32 TempAddr2 = 0, RefreshAddr2 = 0;
+uint32 TempAddr3 = 0, RefreshAddr3 = 0;
 static int maxsprites = 8; //mod: who need limits?
 							//mod: Felix Cat require limit...okay
 
 /* scanline is equal to the current visible scanline we're on. */
 int scanline;
+				
 static uint32 scanlines_per_frame;
 
 typedef struct {
@@ -177,8 +263,13 @@ typedef struct {
 
 uint16 PPU[4];
 static SPRB SPRBUF[0x400];
-int PPUSPL;
-uint8 NTARAM[0x800], PALRAM[0x100], SPRAM[0x400], NTARAM2[0x800], NTATRIB[0x800], NTATRIB2[0x800];
+int PPUSPL = 0;
+uint8 NTARAM[0x800], PALRAM[0x100], SPRAM[0x400], NTARAM2[0x800], NTARAM3[0x800];
+uint8 NTATRIB[0x1000], NTATRIB2[0x1000], NTATRIB3[0x1000];
+					
+					 
+					 
+						  
 uint8 UPALRAM[0x03];/* for 0x4/0x8/0xC addresses in palette, the ones in
 					 * 0x20 are 0 to not break fceu rendering.
 					 */
@@ -186,6 +277,9 @@ uint8 UPALRAM[0x03];/* for 0x4/0x8/0xC addresses in palette, the ones in
 #define MMC5SPRVRAMADR(V)   &MMC5SPRVPage[(V) >> 10][(V)]
 #define VRAMADR(V) &VPage[(V) >> 10][(V)]
 
+									
+																		  
+			  
 uint8 * MMC5BGVRAMADR(uint32 V) {
 	if (!Sprite16) {
 		extern uint8 mmc5ABMode;				/* A=0, B=1 */
@@ -196,9 +290,37 @@ uint8 * MMC5BGVRAMADR(uint32 V) {
 	} else return &MMC5BGVPage[(V) >> 10][(V)];
 }
 
+																   
+																			  
+						
+						   
+
+
+
+
+
+
+
+
+
+
+
+
+										   
+
+																									 
+
+
+
+
+				 
+
 static DECLFR(A2002) {
 	uint8 ret;
 
+
+		   
+					  
 	FCEUPPU_LineUpdate();
 	ret = PPU_status;
 	ret |= PPUGenLatch & 0x1F;
@@ -209,6 +331,7 @@ static DECLFR(A2002) {
 	{
 		vtoggle = 0;
 		vtoggle2 = 0;
+		vtoggle3 = 0;
 		PPU_status &= 0x7F;
 		PPUGenLatch = ret;
 	}
@@ -216,98 +339,251 @@ static DECLFR(A2002) {
 	return ret;
 }
 
+					  
+
+					   
+					 
+ 
+ 
+
 static DECLFR(A200x) {	/* Not correct for $2004 reads. */
 	FCEUPPU_LineUpdate();
 	return PPUGenLatch;
 }
 
+static DECLFR(A200F) {	/* Not correct for $2004 reads. */
+//	FCEUPPU_LineUpdate();
+	return scanline;
+}
 static DECLFR(A2007) {
 	uint8 ret;
-	uint32 tmp = RefreshAddr & 0xFFFF;
-if(!sprites256) tmp &= 0x3FFF;
-	FCEUPPU_LineUpdate();
+	uint32 tmp = RefreshAddr &0xffff;
+
+
+
+ {
+		FCEUPPU_LineUpdate();
 
 		if (tmp >= 0x3F00 && tmp <= 0x3FFF) {	// Palette RAM tied directly to the output data, without VRAM buffer
 			if (!(tmp & 0xF)) {
-			if (!(tmp & 0xC))
-				ret = PALRAM[0x00];
-			else
-				ret = UPALRAM[((tmp & 0xC) >> 2) - 1];
-		} else
-			ret = PALRAM[tmp & 0xFF];
-		if (GRAYSCALE)
-			ret &= 0x30;
-		#ifdef FCEUDEF_DEBUGGER
-		if (!fceuindbg)
-		#endif
-		{
+				if (!(tmp & 0xC))
+					ret = READPAL(0x00);
+				else
+					ret = READUPAL(((tmp & 0xC) >> 2) - 1);
+			} else
+				ret = READPAL(tmp & 0xfF);
+			#ifdef FCEUDEF_DEBUGGER
+			if (!fceuindbg)
+			#endif
+			{
 				if ((tmp - 0x1000) < 0x2000 || (tmp - 0x1000)>0x3fff)
 				{
 					if(tmp<0x4000)
 					{
 						if(chrambank_V[tmp>>8])
-							VRAMBuffer = chrramm[(chrambank_V[(tmp-0x1000)>>8]<<8)|((tmp-0x1000)&0xFF)];
+							VRAMBuffer = chrramm[chrambank_V[(tmp-0x1000)>>8]*256+((tmp-0x1000)&0xFF)];
 							else
 						VRAMBuffer = VPage[(tmp - 0x1000) >> 10][tmp - 0x1000];
 					}
-					else VRAMBuffer = extra_ppu[tmp-0x1000];
+					else VRAMBuffer =extra_ppu[tmp-0x1000];
 				}
-			else
-				VRAMBuffer = vnapage[((tmp - 0x1000) >> 10) & 0x3][(tmp - 0x1000) & 0x3FF];
-			if (PPU_hook) PPU_hook(tmp);
-		}
-	} else {
-		ret = VRAMBuffer;
-		#ifdef FCEUDEF_DEBUGGER
-		if (!fceuindbg)
-		#endif
-		{
-			if (PPU_hook) PPU_hook(tmp);
-			PPUGenLatch = VRAMBuffer;
+				else
+					VRAMBuffer = vnapage[((tmp - 0x1000) >> 10) & 0x3][(tmp - 0x1000) & 0x3FF];
+				if (PPU_hook) PPU_hook(tmp);
+			}
+		} else {
+			uint32 tmp2 = RefreshAddr &0xffff;
+			ret = VRAMBuffer;
+			#ifdef FCEUDEF_DEBUGGER
+			if (!fceuindbg)
+			#endif
+			{
+				if (PPU_hook) PPU_hook(tmp);
+				PPUGenLatch = VRAMBuffer;
 				if (tmp < 0x2000 || tmp > 0x7fff) {
-				if(tmp<0x4000 || (tmp<0xA000 && vt03_mmc3_flag))
-				{
-							if(chrambank_V[tmp>>8])
-							VRAMBuffer = chrramm[(chrambank_V[tmp>>8]<<8)|(tmp&0xFF)];
+				
+					if(tmp<0x4000 || (tmp<0xA000 && vt03_mmc3_flag))
+					{
+						if(chrambank_V[tmp>>8] && tmp<0x4000)
+							VRAMBuffer = chrramm[chrambank_V[tmp>>8]*256+(tmp&0xFF)];
 							else
 							VRAMBuffer = VPage[tmp >> 10][tmp];
-				}
+					}
 					else VRAMBuffer = extra_ppu[tmp];
-			} else if (tmp < 0x3F00)
-				VRAMBuffer = vnapage[(tmp >> 10) & 0x3][tmp & 0x3FF];
+				} else if (tmp < 0x3F00)
+					VRAMBuffer = vnapage[(tmp >> 10) & 0x3][tmp & 0x3FF];
+
+			}
 		}
-	}
 
 	#ifdef FCEUDEF_DEBUGGER
-	if (!fceuindbg)
+		if (!fceuindbg)
 	#endif
-	{
+		{
+			if ((ScreenON || SpriteON) && (scanline < 240)) {
+				uint32 rad = RefreshAddr;
+				if (!wscre)
+				{
+					if (ScreenON || SpriteON) {
+						uint32 rad = RefreshAddr;
+
+						if ((rad & 0x7000) == 0x7000) {
+							rad ^= 0x7000;
+							if ((rad & 0x3E0) == 0x3A0)
+								rad ^= 0xBA0;
+							else if ((rad & 0x3E0) == 0x3e0)
+								rad ^= 0x3e0;
+							else
+								rad += 0x20;
+						}
+						else
+							rad += 0x1000;
+						RefreshAddr = rad;
+					}
+				}
+				else	if (ScreenON || SpriteON) {
+					uint32 rad = RefreshAddr;
+
+					if ((rad & 0x7000) == 0x7000) {
+						rad ^= 0x7000;
+						if ((rad & 0x3E0) == 0x3E0)
+							rad ^= 0x3E0;
+						else if ((rad & 0x3E0) == 0x3e0)
+							rad ^= 0x3e0;
+						else
+							rad += 0x20;
+					}
+					else
+						rad += 0x1000;
+					RefreshAddr = rad;
+				}
+			} else {
+  if (INC32)				{
+					if(!wscre)RefreshAddr += 32;
+					else RefreshAddr += 64;
+				}
+  else RefreshAddr++;
+			}
+			if (PPU_hook) PPU_hook(RefreshAddr &0xffff);
+		}
+		return ret;
+	}  
+}
+static DECLFR(A3007) {
+	uint8 ret;
+	FCEUPPU_LineUpdate();
+	int tmp = RefreshAddr2;
+	if (tmp < 0x2000 || tmp>0x3FFF)
+		ret = extra_ppu2[tmp];
+	else
+		ret = vnapage2[(tmp >> 10) & 0x3][tmp & 0x3FF];
 		if ((ScreenON || SpriteON) && (scanline < 240)) {
-			uint32 rad = RefreshAddr;
+			uint32 rad = RefreshAddr2;
+			if (!wscre)
+			{
+				if (ScreenON || SpriteON) {
+					uint32 rad = RefreshAddr2;
+
+					if ((rad & 0x7000) == 0x7000) {
+						rad ^= 0x7000;
+						if ((rad & 0x3E0) == 0x3A0)
+							rad ^= 0xBA0;
+						else if ((rad & 0x3E0) == 0x3e0)
+							rad ^= 0x3e0;
+						else
+							rad += 0x20;
+					}
+					else
+						rad += 0x1000;
+					RefreshAddr2 = rad;
+				}
+			}
+			else	if (ScreenON || SpriteON) {
+				uint32 rad = RefreshAddr2;
+
+				if ((rad & 0x7000) == 0x7000) {
+					rad ^= 0x7000;
+					if ((rad & 0x3E0) == 0x3E0)
+						rad ^= 0x3E0;
+					else if ((rad & 0x3E0) == 0x3e0)
+						rad ^= 0x3e0;
+					else
+						rad += 0x20;
+				}
+				else
+					rad += 0x1000;
+				RefreshAddr2 = rad;
+			}
+		}
+		else {
+			if (inc32_2nd) {
+					if(!wscre || wscre_new)RefreshAddr2 += 32;
+					else RefreshAddr2 += 64;
+			}
+			else RefreshAddr2++;
+		}
+		if (PPU_hook) PPU_hook(RefreshAddr2 & 0xffff);
+	
+	return ret;
+}
+
+static DECLFR(A3017) {
+	uint8 ret;
+	FCEUPPU_LineUpdate();
+	int tmp = RefreshAddr3;
+	if (tmp < 0x2000 || tmp>0x3FFF)
+		ret = extra_ppu3[tmp];
+	else
+		ret = vnapage3[(tmp >> 10) & 0x3][tmp & 0x3FF];
+	if ((ScreenON || SpriteON) && (scanline < 240)) {
+		uint32 rad = RefreshAddr3;
+		if (!wscre)
+		{
+			if (ScreenON || SpriteON) {
+				uint32 rad = RefreshAddr3;
+
+				if ((rad & 0x7000) == 0x7000) {
+					rad ^= 0x7000;
+					if ((rad & 0x3E0) == 0x3A0)
+						rad ^= 0xBA0;
+					else if ((rad & 0x3E0) == 0x3e0)
+						rad ^= 0x3e0;
+					else
+						rad += 0x20;
+				}
+				else
+					rad += 0x1000;
+				RefreshAddr3 = rad;
+			}
+		}
+		else	if (ScreenON || SpriteON) {
+			uint32 rad = RefreshAddr3;
+
 			if ((rad & 0x7000) == 0x7000) {
 				rad ^= 0x7000;
-				if ((rad & 0x3E0) == 0x3A0)
-					rad ^= 0xBA0;
+				if ((rad & 0x3E0) == 0x3E0)
+					rad ^= 0x3E0;
 				else if ((rad & 0x3E0) == 0x3e0)
 					rad ^= 0x3e0;
 				else
 					rad += 0x20;
-			} else
-				rad += 0x1000;
-			RefreshAddr = rad;
-		} else {
-		  if (INC32)				{
-					if(!wscre)RefreshAddr += 32;
-					else RefreshAddr += 64;
-				}
+			}
 			else
-				RefreshAddr++;
+				rad += 0x1000;
+			RefreshAddr3 = rad;
 		}
-		if (PPU_hook) PPU_hook(RefreshAddr & 0xffff);
 	}
+	else {
+		if (inc32_3nd) {
+					if(!wscre || wscre_new)RefreshAddr2 += 32;
+					else RefreshAddr2 += 64;
+		}
+		else RefreshAddr3++;
+	}
+	if (PPU_hook) PPU_hook(RefreshAddr3 & 0xffff);
+
 	return ret;
 }
-
 static DECLFW(B2000) {
 	FCEUPPU_LineUpdate();
 	PPUGenLatch = V;
@@ -318,14 +594,67 @@ static DECLFW(B2000) {
 	PPU[0] = V;
 	TempAddr &= 0xF3FF;
 	TempAddr |= (V & 3) << 10;
+
 }
 
 static DECLFW(B3000) {
 	FCEUPPU_LineUpdate();
-	PPUGenLatch = V;
-
+	PPUGenLatch2 = V;
+	inc32_2nd = V & 4;
 	TempAddr2 &= 0xF3FF;
 	TempAddr2 |= (V & 3) << 10;
+
+}
+
+static DECLFW(B3010) {
+	FCEUPPU_LineUpdate();
+	PPUGenLatch3 = V;
+
+	//	if (!(PPU[0] & 0x80) && (V & 0x80) && (PPU_status & 0x80))
+	//		TriggerNMI2();
+	//
+	//	PPU[0] = V;
+	inc32_3nd = V & 4;
+	TempAddr3 &= 0xF3FF;
+	TempAddr3 |= (V & 3) << 10;
+
+}
+static DECLFW(B3015) {
+	uint32 tmp = TempAddr3;
+	  
+	FCEUPPU_LineUpdate();
+	PPUGenLatch3 = V;
+	if (!vtoggle3) {
+		tmp &= 0xFFE0;
+		tmp |= V >> 3;
+		XOffset3 = V & 7;
+	} else {
+		tmp &= 0x8C1F;
+		tmp |= ((V & ~0x7) << 2);
+		tmp |= (V & 7) << 12;
+	}
+	TempAddr3 = tmp;
+//	if (nes128) RefreshAddr3 = tmp;
+	vtoggle3 ^= 1;
+}
+static DECLFW(B3016) {
+	FCEUPPU_LineUpdate();
+
+	PPUGenLatch3 = V;
+	if (!vtoggle3) {
+		TempAddr3 &= 0x00FF;
+		TempAddr3 |= (V & 0xFF) << 8;
+	} else {
+		TempAddr3 &= 0xFF00;
+		TempAddr3 |= V;
+
+		RefreshAddr3 = TempAddr3;
+
+//		if (PPU_hook)
+//			PPU_hook(RefreshAddr3);
+	}
+
+	vtoggle3 ^= 1;
 }
 static DECLFW(B2001) {
 	FCEUPPU_LineUpdate();
@@ -335,9 +664,357 @@ static DECLFW(B2001) {
 		deemp = V >> 5;
 }
 
+static DECLFW(B3017) {
+	uint32 tmp = RefreshAddr3 & 0xFFFF;
+	//FCEUPPU_LineUpdate();
+	PPUGenLatch3 = V;
+	extra_ppu3[tmp] = V;
+	if (wscre_new && tmp > 0x1FFF && tmp < 0x4000)
+	{
+		if (tmp < 0x2800)
+		{
+			vnapage3[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+		}
+		else
+			NTATRIB3[tmp & wscre_32_2_3] = V;
+
+		if (inc32_3nd) {
+							if(!wscre || wscre_new)RefreshAddr2 += 32;
+					else RefreshAddr2 += 64;
+	
+		}
+		else RefreshAddr3++;
+		if (PPU_hook)
+			PPU_hook(RefreshAddr3 & 0xffff);
+		return;
+	}
+	if (!wscre)
+	{
+		if (0)
+		{
+			if (tmp < 0x3000)
+			{
+				vnapage3[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			}
+			else
+				NTATRIB3[tmp & wscre_32_2_3] = V;
+		}
+		else
+		{
+			if (tmp < 0x2000 || tmp>0x4000)extra_ppu3[tmp] = V;
+			else if (tmp < 0x3f00)vnapage3[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			else
+			{
+				if (vt03_mode)
+				{
+					if (!(tmp & 0xF)) {
+						if (!(tmp & 0x30))
+							PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0x30) >> 2) - 1] = V & 0x7f;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
+				else
+				{
+					if (!(tmp & 0x3)) {
+						if (!(tmp & 0x0C))
+							PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0xFF;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
+			}
+		}
+	}
+	else
+	{
+        if (tmp < 0x2000 || tmp>0x4000)extra_ppu3[tmp] = V;
+		else if (tmp < 0x2800)
+		{
+			if (tmp & 0x20)
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7C0) >> 1) + temp1 + 0x2400;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				vnapage3[((temp2 & 0xF00) >> 10)][temp2 & 0x3FF] = V;
+
+			}
+			else
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7E0) >> 1) + temp1 + 0x2000;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				vnapage3[((temp2 & 0xF00) >> 10)][temp2 & 0x3FF] = V;
+			}
+		}
+		else
+
+		{
+			if (tmp & 0x20)
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7C0) >> 1) + temp1 + 0x2400;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				NTATRIB3[temp2 & wscre_32_2_3] = V;
+
+			}
+			else
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7E0) >> 1) + temp1 + 0x2000;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				NTATRIB3[temp2 & wscre_32_2_3] = V;
+			}
+		}
+
+
+
+	}
+
+	if (inc32_3nd) {
+		if (!wscre)RefreshAddr3 += 32;
+		else RefreshAddr3 += 64;
+	}
+	else RefreshAddr3++;
+	//RefreshAddr2 &= 0x3fff;
+//	if (PPU_hook)
+//			PPU_hook(RefreshAddr2 &0xffff);
+}
+void B3007_ex(uint32 A, uint8 V)
+{
+	uint32 tmp = RefreshAddr2 & 0xFFFF;
+	extra_ppu2[tmp] = V;
+	if (wscre_new && tmp>0x1FFF && tmp<0x4000)
+	{
+		if (tmp < 0x2800)
+		{
+			vnapage2[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+		}
+		else
+			NTATRIB2[tmp & wscre_32_2_3] = V;
+
+		if (inc32_2nd) {
+						RefreshAddr2 += 32;
+			
+		
+		}
+		else RefreshAddr2++;
+		
+		return;
+	}
+
+
+	if (!wscre)
+	{
+		if (0)
+		{
+			if (tmp < 0x3000)
+			{
+				vnapage2[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			}
+			else
+				NTATRIB2[tmp & wscre_32_2_3] = V;
+		}
+		else
+		{
+			if (tmp < 0x2000 || tmp>0x4000)extra_ppu2[tmp] = V;
+			else if (tmp < 0x3f00)vnapage2[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			else
+			{
+				if (vt03_mode)
+				{
+					if (!(tmp & 0xF)) {
+						if (!(tmp & 0x30))
+							PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0x30) >> 2) - 1] = V & 0x7f;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
+				else
+				{
+					if (!(tmp & 0x3)) {
+						if (!(tmp & 0x0C))
+							PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0xFF;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
+			}
+		}
+	}
+	else
+	{
+		if (tmp < 0x2000 || tmp>0x4000)extra_ppu2[tmp] = V;
+		else if (tmp < 0x2800)
+		{
+			if (tmp & 0x20)
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7C0) >> 1) + temp1 + 0x2400;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				vnapage2[((temp2 & 0xF00) >> 10)][temp2 & 0x3FF] = V;
+
+			}
+			else
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7E0) >> 1) + temp1 + 0x2000;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				vnapage2[((temp2 & 0xF00) >> 10)][temp2 & 0x3FF] = V;
+			}
+		}
+		else
+		{
+			if (tmp & 0x20)
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7C0) >> 1) + temp1 + 0x2400;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				NTATRIB2[temp2 & wscre_32_2_3] = V;
+
+			}
+			else
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7E0) >> 1) + temp1 + 0x2000;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				NTATRIB2[temp2 & wscre_32_2_3] = V;
+			}
+		}
+
+
+
+	}
+
+
+}
+void B3017_ex(uint32 A, uint8 V)
+{
+	uint32 tmp = RefreshAddr3 & 0xFFFF;
+	extra_ppu3[tmp] = V;
+	if (wscre_new && tmp > 0x1FFF && tmp < 0x4000)
+	{
+		if (tmp < 0x2800)
+		{
+			vnapage3[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+		}
+		else
+			NTATRIB3[tmp & wscre_32_2_3] = V;
+
+		if (inc32_3nd) {
+			RefreshAddr3 += 32;
+		
+		}
+		else RefreshAddr3++;
+
+		return;
+	}
+
+
+	if (!wscre)
+	{
+		if (0)
+		{
+			if (tmp < 0x3000)
+			{
+				vnapage3[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			}
+			else
+				NTATRIB3[tmp & wscre_32_2_3] = V;
+		}
+		else
+		{
+			if (tmp < 0x2000 || tmp>0x4000)extra_ppu3[tmp] = V;
+			else if (tmp < 0x3f00)vnapage3[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			else
+			{
+				if (vt03_mode)
+				{
+					if (!(tmp & 0xF)) {
+						if (!(tmp & 0x30))
+							PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0x30) >> 2) - 1] = V & 0x7f;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
+				else
+				{
+					if (!(tmp & 0x3)) {
+						if (!(tmp & 0x0C))
+							PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0xFF;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
+			}
+		}
+	}
+	else
+	{
+		if (tmp < 0x2000 || tmp>0x4000)extra_ppu3[tmp] = V;
+		else if (tmp < 0x2800)
+		{
+			if (tmp & 0x20)
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7C0) >> 1) + temp1 + 0x2400;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				vnapage3[((temp2 & 0xF00) >> 10)][temp2 & 0x3FF] = V;
+
+			}
+			else
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7E0) >> 1) + temp1 + 0x2000;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				vnapage3[((temp2 & 0xF00) >> 10)][temp2 & 0x3FF] = V;
+			}
+		}
+		else
+		{
+			if (tmp & 0x20)
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7C0) >> 1) + temp1 + 0x2400;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				NTATRIB3[temp2 & wscre_32_2_3] = V;
+
+			}
+			else
+			{
+				int temp1 = tmp & 0x1F;
+				int temp2 = ((tmp & 0x7E0) >> 1) + temp1 + 0x2000;
+				//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+				NTATRIB3[temp2 & wscre_32_2_3] = V;
+			}
+		}
+
+
+
+	}
+
+
+}
+
 static DECLFW(B2002) {
 	PPUGenLatch = V;
 }
+		  
+   
+	   
+	 
 
 static DECLFW(B2003) {
 	PPUGenLatch = V;
@@ -347,14 +1024,14 @@ static DECLFW(B2003) {
 
 static DECLFW(B2004) {
 	PPUGenLatch = V;
-	if (PPUSPL >= 8) {
-		if (PPU[3] >= 8)
-			SPRAM[PPU[3]] = V;
-	} else {
-		SPRAM[PPUSPL] = V;
-	}
-	PPU[3]++;
-	PPUSPL++;
+		if (PPUSPL >= 8) {
+			if (PPU[3] >= 8)
+				SPRAM[PPU[3]] = V;
+		} else {
+			SPRAM[PPUSPL] = V;												  
+		}
+		PPU[3]++;
+		PPUSPL++;
 		if (sprites256) { if (PPU[3] == 0x400)PPU[3] = 0; }
 		if (!sprites256) { if (PPU[3] == 0x100)PPU[3] = 0; }
 		if (sprites256) { if (PPUSPL == 0x400)PPUSPL = 0; }
@@ -369,19 +1046,23 @@ static DECLFW(B2005) {
 		tmp &= 0xFFE0;
 		tmp |= V >> 3;
 		XOffset = V & 7;
+ 
 	} else {
 		tmp &= 0x8C1F;
 		tmp |= ((V & ~0x7) << 2);
 		tmp |= (V & 7) << 12;
+
 	}
 	TempAddr = tmp;
+									 
+				 
 	vtoggle ^= 1;
 }
 
 static DECLFW(B3005) {
 	uint32 tmp = TempAddr2;
 	FCEUPPU_LineUpdate();
-	PPUGenLatch = V;
+	PPUGenLatch2 = V;
 	if (!vtoggle2) {
 		tmp &= 0xFFE0;
 		tmp |= V >> 3;
@@ -390,6 +1071,7 @@ static DECLFW(B3005) {
 		tmp &= 0x8C1F;
 		tmp |= ((V & ~0x7) << 2);
 		tmp |= (V & 7) << 12;
+
 	}
 	TempAddr2 = tmp;
 	vtoggle2 ^= 1;
@@ -402,21 +1084,134 @@ static DECLFW(B2006) {
 	if (!vtoggle) {
 		TempAddr &= 0x00FF;
 		TempAddr |= (V & 0xff) << 8;
+
+
 	} else {
 		TempAddr &= 0xFF00;
 		TempAddr |= V;
 
 		RefreshAddr = TempAddr;
+				
 		if (PPU_hook)
 			PPU_hook(RefreshAddr);
+
+
 	}
 	if(!sprites256)TempAddr &= 0x3FFF;
 	vtoggle ^= 1;
 }
+
+
+
+uint8 C_HV[64];
+static void recalculate_hv(uint8 attr, uint16  vadr, uint16 addr)
+{
+	uint8 nondef[64];
+	for (int x = 0; x < 64; x++)
+	{
+		nondef[x] = 0;
+		C_HV[x] = 0;
+	}
+
+	switch (attr & 0xC0)
+	{
+	case 0x40:
+	{
+		for (int x = 0; x < 64; x++)
+		{
+			nondef[x] |= ((extra_ppu[vadr + x] >> 7) << 0) & 0x1;
+			nondef[x] |= ((extra_ppu[vadr + x] >> 6) << 1) & 0x2;
+			nondef[x] |= ((extra_ppu[vadr + x] >> 5) << 2) & 0x4;
+			nondef[x] |= ((extra_ppu[vadr + x] >> 4) << 3) & 0x8;
+			nondef[x] |= ((extra_ppu[vadr + x] >> 3) << 4) & 0x10;
+			nondef[x] |= ((extra_ppu[vadr + x] >> 2) << 5) & 0x20;
+			nondef[x] |= ((extra_ppu[vadr + x] >> 1) << 6) & 0x40;
+			nondef[x] |= ((extra_ppu[vadr + x] >> 0) << 7) & 0x80;
+		}
+		for (int x = 0; x < 64; x++)
+			C_HV[x] = nondef[x];
+		break;
+	}
+	case 0x80:
+	{
+		vadr &= 0xFFF8;
+		for (uint8 x = 0; x < 8; x++)
+		{
+			nondef[x+0]  = extra_ppu[vadr + 7 -  x];
+			nondef[x+8]  = extra_ppu[vadr + 15 - x];
+			nondef[x+16] = extra_ppu[vadr + 23 - x];
+			nondef[x+24] = extra_ppu[vadr + 31 - x];
+			nondef[x + 32] = extra_ppu[vadr + 39 - x];
+			nondef[x + 40] = extra_ppu[vadr + 47 - x];
+			nondef[x + 48] = extra_ppu[vadr + 55 - x];
+			nondef[x + 56] = extra_ppu[vadr + 63 - x];
+
+
+		}
+
+		for (int x = 0; x < 32; x++)
+		{
+		//	RAM[0x1500+x] = nondef[x];
+		//	RAM[0x1540 + x] = extra_ppu[vadr + x];
+			C_HV[x ] = nondef[x + ((addr >> 12) & 7)];
+		} 
+		break;
+	}
+	case 0xC0:
+	{
+		uint8 C_temp[64];
+		vadr &= 0xFFF8;
+		for (uint8 x = 0; x < 8; x++)
+		{
+			nondef[x + 0] = extra_ppu[vadr + 7 - x];
+			nondef[x + 8] = extra_ppu[vadr + 15 - x];
+			nondef[x + 16] = extra_ppu[vadr + 23 - x];
+			nondef[x + 24] = extra_ppu[vadr + 31 - x];
+			nondef[x + 32] = extra_ppu[vadr + 39 - x];
+			nondef[x + 40] = extra_ppu[vadr + 47 - x];
+			nondef[x + 48] = extra_ppu[vadr + 55 - x];
+			nondef[x + 56] = extra_ppu[vadr + 63 - x];
+
+
+		}
+
+		for (int x = 0; x < 32; x++)
+		{
+			//	RAM[0x1500+x] = nondef[x];
+			//	RAM[0x1540 + x] = extra_ppu[vadr + x];
+			C_temp[x] = nondef[x + ((addr >> 12) & 7)];
+
+		}
+
+		for (int x = 0; x < 32; x++)
+		{
+			nondef[x] = 0;
+			nondef[x] |= ((C_temp[x] >> 7) << 0) & 0x1;
+			nondef[x] |= ((C_temp[x] >> 6) << 1) & 0x2;
+			nondef[x] |= ((C_temp[x] >> 5) << 2) & 0x4;
+			nondef[x] |= ((C_temp[x] >> 4) << 3) & 0x8;
+			nondef[x] |= ((C_temp[x] >> 3) << 4) & 0x10;
+			nondef[x] |= ((C_temp[x] >> 2) << 5) & 0x20;
+			nondef[x] |= ((C_temp[x] >> 1) << 6) & 0x40;
+			nondef[x] |= ((C_temp[x] >> 0) << 7) & 0x80;
+		}
+		for (int x = 0; x < 64; x++)
+			C_HV[x] = nondef[x];
+		break;
+	}
+	case 0:
+	{
+		//	default:
+		for (int x = 0; x < 32; x++)
+			C_HV[x] = extra_ppu[vadr + x];
+		break;
+	}
+	}
+}
 static DECLFW(B3006) {
 	FCEUPPU_LineUpdate();
 
-	PPUGenLatch = V;
+	PPUGenLatch2 = V;
 	if (!vtoggle2) {
 		TempAddr2 &= 0x00FF;
 		TempAddr2 |= (V & 0xff) << 8;
@@ -428,154 +1223,261 @@ static DECLFW(B3006) {
 		if (PPU_hook)
 			PPU_hook(RefreshAddr2);
 	}
+
 	vtoggle2 ^= 1;
 }
 static DECLFW(B2007) {
-	uint16 tmp = RefreshAddr & 0xfFFF;
-//	if(!sprites256) tmp &= 0x3FFF;
-		FCEUPPU_LineUpdate();
-	PPUGenLatch = V;
-	if (tmp < 0x2000 || tmp > 0x3FFF) {
-//mod: we don't need protected vram in extra mode?
-//if (PPUCHRRAM & (1 << (tmp >> 10)) || !sprites256) //mod: still need for original games(codemaster?)
-			if(tmp<0x2000)
-			{
-				if(chrambank_V[tmp>>8])
-							chrramm[(chrambank_V[tmp>>8]<<8)|(tmp&0xFF)] = V;
-							else
-				VPage[tmp >> 10][tmp] = V;
-			}
-					extra_ppu[tmp]=V;				//mod: save all vram anyway(debug and some codes below)
-	} else if (tmp < 0x3F00) 
+	uint32 tmp = RefreshAddr & 0xFFFF;
+
+	if (tmp > 0x3fff && tmp < 0x8000)
 	{
-		
-		if(!wscre) if(PPUNTARAM&(1<<((tmp&0xF00)>>10)))vnapage[((tmp&0xF00)>>10)][tmp&0x3FF]=V;
-		//mod: emulating 64x32 tiles(like Genesis), just convert in standard format
+		tmp &= 0x3FFF;
+	}
+	//uint32 tmp2 = RefreshAddr &0xffff;
+//	FCEUPPU_LineUpdate();
+
+
+{
+		extra_ppu[tmp]=V;
+		PPUGenLatch = V;
+//		if (tmp2 > 0x3fff)VPage[tmp2 >> 10][tmp2] = V;
+//		if(tmp> 0x3fff)VPage[tmp >> 10][tmp] = V;
+		if ((tmp < 0x2000) || (tmp > 0x3fff)) {
+		//	if (PPUCHRRAM & (1 << (tmp >> 10)))
+
+				if(tmp<0x4000)
+					{
+						if(chrambank_V[tmp>>8])
+							chrramm[chrambank_V[tmp>>8]*256+(tmp&0xFF)] = V;
+							else
+						VPage[tmp >> 10][tmp] = V;
+			//	else 
+				}
+					
+
+		} else if (tmp < 0x3F00) {
+
+			if (!wscre) if (PPUNTARAM & (1 << ((tmp & 0xF00) >> 10)))vnapage[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			if (wscre_new)
+			{
+				if (tmp < 0x2800)
+				{
+					vnapage[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+				}
+				else
+					NTATRIB[tmp & wscre_32] = V;
+
+				if (INC32) {
+				RefreshAddr += 32;
+
+				}
+				else RefreshAddr++;
+				if (PPU_hook)
+					PPU_hook(RefreshAddr & 0xffff);
+				return;
+			}
 		if(wscre)
 		{
-			if(tmp<0x2800) //mod: tiles
-			{
-				if(tmp&0x20)
-				{
-					int temp1 = tmp&0x1F;
-					int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
-                    vnapage[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
-				}
-				else
-				{
-					int temp1 = tmp&0x1F;
-					int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
-					vnapage[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
-				}
-			}
-			else  //mod: attributes
-			{
-				if(tmp&0x20)
-				{
-					int temp1 = tmp&0x1F;
-					int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
-                    NTATRIB[temp2&0x7FF]=V;
-				}
-				else
-				{
-					int temp1 = tmp&0x1F;
-					int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
-                    NTATRIB[temp2&0x7FF]=V;
-				}
-			}
+								if(tmp<0x2800)
+								{
+								if(tmp&0x20)
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+                          vnapage[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
+	//					  nmtdebug[
+	
+}
+else
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+                          vnapage[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
+}
+							}
+							else 
+							{
+																if(tmp&0x20)
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+                           NTATRIB[temp2& wscre_32]=V;
+						 
+	
+}
+else
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+                          NTATRIB[temp2& wscre_32]=V;
+						
+}
+							}
+
+
 		}
-		
-	} else if(tmp<0x4000) {
-			if(!V) V = 0x2d; //mod: we need 0x00 color for tranparency 
+		} else if(tmp<0x4000) {
+			
+			
+			tmp &= 0xffff;
+			if(!V) V = 0x2d;
 			if(vt03_mode)
 			{
 			if (!(tmp & 0xF)) {
 				if (!(tmp & 0x30))
-					PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0xff;
+					PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0xFF;
+				else
+					UPALRAM[((tmp & 0x30) >> 2) - 1] = V & 0x7f;
 			} else
-				PALRAM[tmp & 0xfF] = V & 0xff;
+				PALRAM[tmp & 0xfF] = V & 0xFF;
 			}
 			else
 			{
-			if(!sprites256) V &=0x3F;
 			if (!(tmp & 0x3)) {
 				if (!(tmp & 0x0C))
-					PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0xff;
+					PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0xFF;
 				else
-					UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0xff;
+					UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0xFF;
 			} else
-				PALRAM[tmp & 0xfF] = V & 0xff;
+				PALRAM[tmp & 0xfF] = V & 0xFF;
 			}
 		}
- 
-
-	if (INC32)
-	{
-		if(!wscre)RefreshAddr += 32;
-		else RefreshAddr += 64;
+		//if (tmp2 > 0x3fff) {
+		////	if (PPUCHRRAM & (1 << (tmp2 >> 10)))
+		//		VPage[tmp2 >> 10][tmp2] = V;
+		//}
+  if (INC32)				{
+					if(!wscre)RefreshAddr += 32;
+					else RefreshAddr += 64;
+				}
+  else RefreshAddr++;
+		if (PPU_hook)
+			PPU_hook(RefreshAddr &0xffff);
+		//if (PPU_hook && tmp2 > 0x3fff)
+		//	PPU_hook(RefreshAddr & 0x4fff);
 	}
-	else
-		RefreshAddr++;
-	if (PPU_hook)
-		PPU_hook(RefreshAddr & 0xffff);
 }
 
 static DECLFW(B3007) {
-	uint32 tmp = RefreshAddr2;
-	PPUGenLatch = V;
-	if(!wscre)
+	uint32 tmp = RefreshAddr2&0xFFFF;
+	
+	PPUGenLatch2 = V;
+	extra_ppu2[tmp] = V;
+	if (wscre_new && tmp > 0x1FFF && tmp < 0x4000)
 	{
-		if(tmp<0x2000 || tmp>0x4000)extra_ppu[tmp+0xE000] = V;
-		else vnapage2[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
-	}
-	else //mod: unfinished part, no demo for testing this...
-	{
-		if(tmp<0x2800)
+		if (tmp < 0x2800)
 		{
-			if(tmp&0x20)
+			vnapage2[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
+			
+		}
+		else
+			NTATRIB2[tmp & wscre_32_2_3] = V;
+
+		if (inc32_2nd) {
+								if(!wscre || wscre_new)RefreshAddr2 += 32;
+					else RefreshAddr2 += 64;
+
+		}
+		else RefreshAddr2++;
+		
+		return;
+	}
+	if (!wscre)
+	{
+		if (0)
+		{
+			if (tmp < 0x3000)
 			{
-				int temp1 = tmp&0x1F;
-				int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
-				vnapage2[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
-				
+				vnapage2[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
 			}
 			else
-			{
-				int temp1 = tmp&0x1F;
-				int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
-				vnapage2[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
-			}
+				NTATRIB2[tmp & wscre_32_2_3] = V;
 		}
-		else 
+		else
 		{
-			if(tmp&0x20)
-			{
-				int temp1 = tmp&0x1F;
-				int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
-				NTATRIB2[temp2&0x7FF]=V;
-				
-			}
+			if (tmp < 0x2000 || tmp>0x4000)extra_ppu2[tmp] = V;
+			else if(tmp<0x3f00)vnapage2[((tmp & 0xF00) >> 10)][tmp & 0x3FF] = V;
 			else
 			{
-				int temp1 = tmp&0x1F;
-				int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
-				NTATRIB2[temp2&0x7FF]=V;
+				if (vt03_mode)
+				{
+					if (!(tmp & 0xF)) {
+						if (!(tmp & 0x30))
+							PALRAM[0x00] = PALRAM[0x10] = PALRAM[0x20] = PALRAM[0x30] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0x30) >> 2) - 1] = V & 0x7f;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
+				else
+				{
+					if (!(tmp & 0x3)) {
+						if (!(tmp & 0x0C))
+							PALRAM[0x00] = PALRAM[0x4] = PALRAM[0x8] = PALRAM[0xC] = V & 0xFF;
+						else
+							UPALRAM[((tmp & 0xC) >> 2) - 1] = V & 0xFF;
+					}
+					else
+						PALRAM[tmp & 0xfF] = V & 0xFF;
+				}
 			}
 		}
-	}
-	
-	
-	
-	if (INC32)
-	{
-		if(!wscre)RefreshAddr += 32;
-		else RefreshAddr += 64;
 	}
 	else
-		RefreshAddr2++;
+	{
+		if (tmp < 0x2000 || tmp>0x4000)extra_ppu2[tmp] = V;
+		else if(tmp<0x2800)
+								{
+								if(tmp&0x20)
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+                          vnapage2[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
 	
-	if (PPU_hook)
-			PPU_hook(RefreshAddr2 &0xffff);
+}
+else
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+                          vnapage2[((temp2&0xF00)>>10)][temp2&0x3FF]=V;
+}
+							}
+							else 
+							{
+																if(tmp&0x20)
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7C0)>>1)+temp1+0x2400;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10wscre_32_2_3
+                           NTATRIB2[temp2& wscre_32_2_3]=V;
+	
+}
+else
+{
+	int temp1 = tmp&0x1F;
+		int temp2 = ((tmp&0x7E0)>>1)+temp1+0x2000;
+	//	 if(PPUNTARAM&(1<<((temp2&0xF00)>>10)))
+                          NTATRIB2[temp2& wscre_32_2_3]=V;
+}
+							}
+
+
+		
+	}
+	
+  if (inc32_2nd)				{
+					if(!wscre || wscre_new)RefreshAddr2 += 32;
+					else RefreshAddr2 += 64;
+				}
+  else RefreshAddr2++;
+
 }
 static DECLFW(B12005) {
 	uint32 tmp = TempAddr;
@@ -658,11 +1560,12 @@ static DECLFW(B401B) {
 	}
 	else okk++;
 }
+
    int dmatgl;
  uint16 dmaread;
  uint16 dmawrite;
  uint16 dmalenght;
- static DECLFW(B4018) //mod: mini dma code
+ static DECLFW(B4018)
  {
 	
 	if(!dmatgl) dmaread = V;
@@ -671,16 +1574,21 @@ static DECLFW(B401B) {
 	if(dmatgl==3) dmawrite |= V<<8;
 	if(dmatgl==4) dmalenght = V;
 	if(dmatgl==5) dmalenght |= V<<8;
-	if(dmatgl==6)								//mod: mode byte 0: rom/ram to ram 1: vram/vrom to vram 2: rom/ram to vram
+	if(dmatgl==6)
 	{
 		dmatgl = 0;
 		int Ax = V;
+		uint16 tempDMA;
+		tempDMA = 0;
+		if ((dmaread & 0xFF00) == 0x4400)
+			tempDMA = (dmaread & 0xFF) | 0x100;
+
 		switch(Ax)
 		{
 			case 0:
 			{
 			 for(int x = 0; x<dmalenght; x++)
-				 X6502_DMW2(dmawrite+x, X6502_DMR2(dmaread+x));
+				 X6502_DMW2(dmawrite+x, X6502_DMR2(dmaread+x, tempDMA));
 			 break;
 			}
 			case 1:
@@ -690,7 +1598,7 @@ static DECLFW(B401B) {
 				 for( int x = 0; x<dmalenght; x++)
 				 {
 				VPage[(dmawrite+x) >> 10][dmawrite+x] = VPage[(dmaread+x) >> 10][dmaread+x];
-				extra_ppu[dmawrite+x] = VPage[(dmaread+x) >> 10][dmaread+x];	//
+				extra_ppu[dmawrite+x] = VPage[(dmaread+x) >> 10][dmaread+x];	//РЅР° РІСЃСЏРєРёР№ СЃР»СѓС‡Р°Р№
 				 }
 			 }
 			 else if(dmaread<0x2000 && dmawrite>0x7FFF)
@@ -711,23 +1619,94 @@ static DECLFW(B401B) {
 			}
 			case 2:
 			{
-				if(dmawrite<0x2000)
+				if (dmawrite < 0x2000)
 				{
-				for( int x = 0; x<dmalenght; x++)
-				 {
-				VPage[(dmawrite+x) >> 10][dmawrite+x] = X6502_DMR2(dmaread+x);
-				 }
+					for (int x = 0; x < dmalenght; x++)
+					{
+						VPage[(dmawrite + x) >> 10][dmawrite + x] = X6502_DMR2(dmaread + x, tempDMA);
+						extra_ppu[dmawrite + x] = X6502_DMR2(dmaread + x, tempDMA);
+					}
 				}
-				else if(dmawrite>0x7FFF)
+				else if (dmawrite > 0x7FFF)
 				{
-				for( int x = 0; x<dmalenght; x++)
-				 {
-				extra_ppu[dmawrite+x] = X6502_DMR2(dmaread+x);
-				 }
+					for (int x = 0; x < dmalenght; x++)
+					{
+						extra_ppu[dmawrite + x] = X6502_DMR2(dmaread + x, tempDMA);
+					}
+				}
+				else if (dmawrite < 0x4000)
+				{
+					int temp_addr = RefreshAddr;
+					for (int x = 0; x < dmalenght; x++)
+					{
+			
+						{
+							RefreshAddr = dmawrite + x;
+							B2007(dmawrite + x, X6502_DMR2(dmaread + x, tempDMA));
+
+						}
+						//else NTATRIB[(dmawrite + x)&0x7FF] = X6502_DMR2(dmaread + x, tempDMA);
+					}
+					RefreshAddr = temp_addr;
+			
+				}
+			
+					
+				break;
+			}
+			case 3:
+			{
+				if (dmawrite < 0x2000 || dmawrite >0x3FFF)
+				{
+					for (int x = 0; x < dmalenght; x++)
+					{
+						extra_ppu2[dmawrite + x] = X6502_DMR2(dmaread + x, tempDMA);
+				//		extra_ppu[dmawrite + x] = X6502_DMR2(dmaread + x);
+					}
+				}
+				else
+				{
+					int temp_addr2 = RefreshAddr2;
+					for (int x = 0; x < dmalenght; x++)
+					{
+			
+						{
+							RefreshAddr2 = dmawrite + x;
+							B3007_ex(dmawrite + x, X6502_DMR2(dmaread + x, tempDMA));
+						}
+					}
+
+					RefreshAddr2 = temp_addr2;
+		
 				}
 				break;
 			}
+			case 4:
+			{
+				if (dmawrite < 0x2000 || dmawrite >0x3FFF)
+				{
+					for (int x = 0; x < dmalenght; x++)
+					{
+						extra_ppu3[dmawrite + x] = X6502_DMR2(dmaread + x, tempDMA);
+						//		extra_ppu[dmawrite + x] = X6502_DMR2(dmaread + x);
+					}
+				}
+				else
+				{
+					int temp_addr2 = RefreshAddr3;
+					for (int x = 0; x < dmalenght; x++)
+					{
+		
+						{
+							RefreshAddr3 = dmawrite + x;
+							B3017_ex(dmawrite + x, X6502_DMR2(dmaread + x, tempDMA));
+						}
+					}
+					RefreshAddr3 = temp_addr2;
 			
+				}
+				break;
+			}
 		}
 	
 	}
@@ -741,7 +1720,7 @@ if(!spr_add_flag)spr_add_flag = 1;
 int t = V<<8;
 for(int x = 0; x<0x100; x++)
 {
-spr_add_atr[x]=X6502_DMR2(t+x);
+spr_add_atr[x]=X6502_DMR2(t+x, 0);
 }
 }
 static DECLFW(B4019) {  //mod: clean 0x1000 bytes of vram 
@@ -749,6 +1728,7 @@ int t = V<<8;
 for(int x = 0; x<0x1000; x++)
 	extra_ppu[t+x] = 0;
 }
+  
 static DECLFR(A12007) {
 	uint8 ret;
 	uint32 tmp = RefreshAddr & 0x3FFF;
@@ -817,6 +1797,7 @@ static DECLFR(A12007) {
 	}
 	return ret;
 }
+
 static DECLFW(B401C) {
 
 	stopclock = V;
@@ -829,7 +1810,8 @@ static DECLFW(CHRAMB)
 {
 	A &= 0x1F;
 	chrambank_V[A] = V;
-
+	
+	
 }
 
 static DECLFW(B4014) {
@@ -841,21 +1823,23 @@ X6502_ADDCYC(512);
 		for(x=0;x<1024;x++)
 			{
 		V = ARead[t+x](t+x);
-	if (PPUSPL >= 8) {
-		if (PPU[3] >= 8)
-			SPRAM[PPU[3]] = V;
-	} else {
+//	if (PPUSPL >= 8) {
+//		if (PPU[3] >= 8)
+//			SPRAM[PPU[3]] = V;
+//	} else {
 		SPRAM[PPUSPL] = V;
-	}
+//	}
 	PPUGenLatch = V;
 	PPU[3]++;
 	PPUSPL++;
     PPU[3] %= 0x400;
 	PPUSPL %= 0x400;
+			
 			}
 		 }
 		 else
 		 {
+		
 		for(x=0;x<256;x++)
 		{
 		V = ARead[t+x](t+x);
@@ -902,25 +1886,32 @@ static DECLFR(A2004)
 static void ResetRL(uint8 *target) {
 	memset(target, 0x0, 512);
 	if (InputScanlineHook)
+								   
 		InputScanlineHook(0, 0, 0, 0);
 	Plinef = target;
 	Pline = target;
+				
 	firsttile = 0;
 	linestartts = timestamp * 48 + X.count;
 	tofix = 0;
 	FCEUPPU_LineUpdate();
 	tofix = 1;
+						 
 }
 
 static uint8 sprlinebuf[512 + 8];
 static uint8 sprlinebuf2[512 + 8]; //mod: garbage?
 void FCEUPPU_LineUpdate(void) {
+
+
 #ifdef FCEUDEF_DEBUGGER
 	if (!fceuindbg)
 #endif
 	if (Pline) {
+  
 		int l = GETLASTPIXEL;
 		RefreshLine(l);
+ 
 	}
 }
 
@@ -945,13 +1936,15 @@ void FCEUI_SetRenderDisable(int sprites, int bg) {
 static void CheckSpriteHit(int p);
 
 static void EndRL(void) {
-	RefreshLine(wss+16);
+	RefreshLine(256+16);
 	if (tofix)
 	{
 		Fixit1();
 		Fixit12();
+		Fixit13();
 	}
-	CheckSpriteHit(wss+16);
+ 
+	CheckSpriteHit(256+16);
 	Pline = 0;
 }
 
@@ -965,7 +1958,7 @@ static void CheckSpriteHit(int p) {
 	if (sphitx == 0x100) return;
 
 	for (x = sphitx; x < (sphitx + 8) && x < l; x++) {
-		if((sphitdata & (0x80 >> (x - sphitx)))&& (priora_bg[x]) ) {
+		if((sphitdata & (0x80 >> (x - sphitx)))&& (priora_bg[x]) && x < 255) {
 			PPU_status |= 0x40;
 			sphitx = 0x100;
 			break;
@@ -980,19 +1973,25 @@ static int spork = 0;
 
 /* lasttile is really "second to last tile." */
 static void FASTAPASS(1) RefreshLine(int lastpixel) {
+				  
 	static uint32 pshift[4];
 	static uint32 pshift2[4];
+	static uint32 pshift3[4];
 	static uint32 atlatch;
 	static uint32 atrib;
 	static uint32 atlatch2;
+	static uint32 atlatch3;
 	uint32 smorkus = RefreshAddr;
     uint32 smorkus2 = RefreshAddr2;
+	uint32 smorkus3 = RefreshAddr3;
 	#define RefreshAddr smorkus
 	#define RefreshAddr2 smorkus2
+	#define RefreshAddr3 smorkus3
 	uint32 vofs;
 	int X1;
 
 	register uint8 *P = Pline;
+							   
 	int lasttile = lastpixel >> 3;
 	int numtiles;
 	static int norecurse = 0;	/* Yeah, recursion would be bad.
@@ -1008,7 +2007,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 			lasttile++;
 	}
 
-	if(wscre || (wss>256))
+	if((wss>256))
 	{
 	if (lasttile > 66) lasttile = 66; //mod: 256+ widht
 	}
@@ -1024,20 +2023,27 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 
 	vofs = 0;
 	int vofs2 = 0;
+	int vofs3 = 0;
 	if(PEC586Hack)
 		vofs = ((RefreshAddr & 0x200) << 3) | ((RefreshAddr >> 12) & 7);
 	else
 		vofs = ((PPU[0] & 0x10) << 8) | ((RefreshAddr >> 12) & 7);
 	
 	if(vt03_mode)vofs = ((PPU[0] & 0x10) << 11) | ((RefreshAddr >> 12) & 7);
-	if(vt03_mode)vofs2 = ((0x10) << 11) | ((RefreshAddr2 >> 12) & 7);
+	if(vt03_mode)vofs2 = ((0x0) << 11) | ((RefreshAddr2 >> 12) & 7);
+			  
+	if (vt03_mode)vofs3 = ((0) << 8) | ((RefreshAddr3 >> 12) & 7);
 	if (!ScreenON && !SpriteON) {
 		uint32 tem;
 		tem = Pal[0] | (Pal[0] << 8) | (Pal[0] << 16) | (Pal[0] << 24);
 		tem |= 0;//0x80808080;
 		FCEU_dwmemset(Pline, tem, numtiles * 8);
+											 
+											 
 		P += numtiles * 8;
+					   
 		Pline = P;
+				
 
 		firsttile = lasttile;
 
@@ -1045,6 +2051,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 		if (lastpixel >= TOFIXNUM && tofix) {
 			Fixit1();
 			Fixit12();
+			 Fixit13();
 			tofix = 0;
 		}
 
@@ -1074,6 +2081,9 @@ else
 	 * It's probably not totally correct for carts in "SL" mode.
 	 */
 
+																						
+															
+							 
 #define PPUT_MMC5
 	if (MMC5Hack && geniestage != 1) {
 		if (MMC5HackCHRMode == 0 && (MMC5HackSPMode & 0x80)) {
@@ -1082,10 +2092,20 @@ else
 			for (X1 = firsttile; X1 < lasttile; X1++) {
 				if ((tochange <= 0 && MMC5HackSPMode & 0x40) || (tochange > 0 && !(MMC5HackSPMode & 0x40))) {
 					#define PPUT_MMC5SP
+	  
+
 					#include "pputile.h"
+
+
+	  
 					#undef PPUT_MMC5SP
 				} else {
+	  
+
 					#include "pputile.h"
+
+
+	  
 				}
 				tochange--;
 			}
@@ -1096,19 +2116,56 @@ else
 			#define PPUT_MMC5SP
 			#define PPUT_MMC5CHR1
 			for (X1 = firsttile; X1 < lasttile; X1++) {
+	  
+ 
 				#include "pputile.h"
+ 
+
+	  
+						   
+							 
+		
+														 
+							
+		
+						  
 			}
 			#undef PPUT_MMC5CHR1
 			#undef PPUT_MMC5SP
 		} else if (MMC5HackCHRMode == 1) {
 			#define PPUT_MMC5CHR1
 			for (X1 = firsttile; X1 < lasttile; X1++) {
+	  
+
 				#include "pputile.h"
+  
+
+	  
+						   
+							 
+		
+														 
+							
+		
+						  
 			}
 			#undef PPUT_MMC5CHR1
 		} else {
 			for (X1 = firsttile; X1 < lasttile; X1++) {
+
+	  
+   
 				#include "pputile.h"
+ 
+
+	  
+						   
+							 
+		
+														 
+							
+		
+						  
 			}
 		}
 	}
@@ -1119,12 +2176,37 @@ else
 		if (PEC586Hack) {
 			#define PPU_BGFETCH
 			for (X1 = firsttile; X1 < lasttile; X1++) {
+
+	  
+
 				#include "pputile.h"
+  
+	  
+						   
+							 
+		
+														 
+							
+		
+						  
 			}
 			#undef PPU_BGFETCH
 		} else {
 			for (X1 = firsttile; X1 < lasttile; X1++) {
+
+	  
+ 
 				#include "pputile.h"
+
+
+	  
+						   
+							 
+		
+														 
+							
+		
+						  
 			}
 		}
 		#undef PPUT_HOOK
@@ -1133,12 +2215,37 @@ else
 		if (PEC586Hack) {
 			#define PPU_BGFETCH
 			for (X1 = firsttile; X1 < lasttile; X1++) {
+
+	  
+
 				#include "pputile.h"
+
+	  
+						   
+							 
+		
+														 
+							
+		
+						  
 			}
 			#undef PPU_BGFETCH
 		} else {
 			for (X1 = firsttile; X1 < lasttile; X1++) {
+
+	  
+
 				#include "pputile.h"
+
+
+	  
+						  
+							
+	   
+														
+						   
+	   
+						 
 			}
 		}
 	}
@@ -1146,7 +2253,7 @@ else
 #undef vofs
 #undef RefreshAddr
 #undef RefreshAddr2
-
+#undef RefreshAddr3
 	/* Reverse changes made before. 
 	if(vt03_mode)
 	{
@@ -1165,11 +2272,13 @@ else
 */
 	RefreshAddr = smorkus;
 	RefreshAddr2 = smorkus2;
+	RefreshAddr3 = smorkus3;
 	if (firsttile <= 2 && 2 < lasttile && !(PPU[1] & 2)) {
 		uint32 tem;
 		tem = Pal[0] | (Pal[0] << 8) | (Pal[0] << 16) | (Pal[0] << 24);
 		tem |= 0;//0x80808080;
 		*(uint32*)Plinef = *(uint32*)(Plinef + 4) = tem;
+  
 	}
 
 	if (!ScreenON) {
@@ -1191,6 +2300,7 @@ else
 	if (lastpixel >= TOFIXNUM && tofix) {
 		Fixit1();
 		Fixit12();
+		Fixit13();
 		tofix = 0;
 	}
 
@@ -1201,9 +2311,17 @@ else
 		InputScanlineHook(Plinef, spork ? sprlinebuf : 0, linestartts, lasttile * 8 - 16);
 	}
 	Pline = P;
-	firsttile = lasttile;
+			   
+	firsttile = lasttile&0xFF;
 }
 
+							
+						   
+				
+						   
+					
+  
+ 
 static INLINE void Fixit2(void) {
 	if (ScreenON || SpriteON) {
 		uint32 rad = RefreshAddr;
@@ -1216,12 +2334,30 @@ static INLINE void Fixit22(void) {
 	if(!vt03_mode) return;
 	if (ScreenON || SpriteON) {
 		uint32 rad = RefreshAddr2;
+		 
+   		if(rad)
+		{
 		rad &= 0xFBE0;
 		rad |= TempAddr2 & 0x041f;
 		RefreshAddr2 = rad;
+		}
+   
 	}
 }
-static void Fixit1(void) {
+static INLINE void Fixit23(void) {
+	if (!vt03_mode) return;
+	if (ScreenON || SpriteON) {
+		uint32 rad = RefreshAddr3;
+		if(rad)
+		{
+		rad &= 0xFBE0;
+		rad |= TempAddr3 & 0x041f;
+		RefreshAddr3 = rad;
+		}
+	}
+}
+static void Fixit1(void) {  // TODOD нужен дубль для второго офна?
+	RefreshAddr &= 0xFFFF;
 	if(!wscre)
 	{if (ScreenON || SpriteON) {
 		uint32 rad = RefreshAddr;
@@ -1255,11 +2391,52 @@ else	if (ScreenON || SpriteON) {
 		RefreshAddr = rad;
 	}
 }
-static void Fixit12(void) {
+static void Fixit12(void) {  // TODOD нужен дубль для второго офна?
+	
 	if(!vt03_mode) return;
-	if (ScreenON || SpriteON) {
+	RefreshAddr2 &= 0xFFFF;
+	if (!wscre)
+	{
+		if (ScreenON || SpriteON) {
+			uint32 rad = RefreshAddr2;
+
+			if ((rad & 0x7000) == 0x7000) {
+				rad ^= 0x7000;
+				if ((rad & 0x3E0) == 0x3A0)
+					rad ^= 0xBA0;
+				else if ((rad & 0x3E0) == 0x3e0)
+					rad ^= 0x3e0;
+				else
+					rad += 0x20;
+			}
+			else
+				rad += 0x1000;
+			RefreshAddr2 = rad;
+		}
+	}
+	else	if (ScreenON || SpriteON) {
 		uint32 rad = RefreshAddr2;
 
+		if ((rad & 0x7000) == 0x7000) {
+			rad ^= 0x7000;
+			if ((rad & 0x3E0) == 0x3E0)
+				rad ^= 0x3E0;
+			else if ((rad & 0x3E0) == 0x3e0)
+				rad ^= 0x3e0;
+			else
+				rad += 0x20;
+		}
+		else
+			rad += 0x1000;
+		RefreshAddr2 = rad;
+	}
+}
+static void Fixit13(void) {  // TODOD нужен дубль для второго офна?
+	if (!vt03_mode) return;
+	if (ScreenON || SpriteON) {
+		uint32 rad = RefreshAddr3;
+			if(rad)
+		{
 		if ((rad & 0x7000) == 0x7000) {
 			rad ^= 0x7000;
 			if ((rad & 0x3E0) == 0x3A0)
@@ -1270,7 +2447,8 @@ static void Fixit12(void) {
 				rad += 0x20;
 		} else
 			rad += 0x1000;
-		RefreshAddr2 = rad;
+		RefreshAddr3 = rad;
+			}
 	}
 }
 void MMC5_hb(int);		/* Ugh ugh ugh. */
@@ -1288,8 +2466,10 @@ static void DoLine(void)
 		return;
 	}
 
+	   
 	target = XBuf + ((scanline < 240 ? scanline : 240)*wss);
 
+																  
 	if (MMC5Hack && (ScreenON || SpriteON)) MMC5_hb(scanline);
 
 	X6502_Run(256);
@@ -1306,6 +2486,8 @@ static void DoLine(void)
 		CopySprites(target);
 
 	if (ScreenON || SpriteON) {	/* Yes, very el-cheapo. */
+						  
+  
 		if (PPU[1] & 0x01) {
 			for (x = (wss/2-1); x >= 0; x--)
 				*(uint32*)&target[x << 2] = (*(uint32*)&target[x << 2]) & 0x30303030;
@@ -1321,8 +2503,9 @@ static void DoLine(void)
 		for (x = (wss/2-1); x >= 0; x--)
 			*(uint32*)&target[x << 2] = (*(uint32*)&target[x << 2]) ;
 
+
 	sphitx = 0x100;
-	for(int x =0; x<(wss+16); x++)
+	for(int x =0; x<(272+256); x++)
 {
 	
 	priora[x] = 0;
@@ -1330,15 +2513,30 @@ static void DoLine(void)
 	if (ScreenON || SpriteON)
 		FetchSpriteData();
 
-   X6502_Run(6);
-   Fixit2();
-   Fixit22();
+
 	if (GameHBIRQHook && (ScreenON || SpriteON) && ((PPU[0] & 0x38) != 0x18)) {
+			X6502_Run(6);
+		
+		Fixit2();
+		Fixit22();
+		Fixit23();	   
+  
+		   
+			
+			
 		X6502_Run(4);
 		GameHBIRQHook();
 		X6502_Run(85 - 16 - 10);
 	} else {
+				X6502_Run(6);	// Tried 65, caused problems with Slalom(maybe others)
 
+		Fixit2();
+		Fixit22();
+		Fixit23();															  
+
+		   
+			
+			
 		X6502_Run(85 - 6 - 16);
 
 		/* A semi-hack for Star Trek: 25th Anniversary */
@@ -1346,13 +2544,32 @@ static void DoLine(void)
 			GameHBIRQHook();
 	}
 
+ 
 	if (SpriteON)
 		RefreshSprites();
 	if (GameHBIRQHook2 && (ScreenON || SpriteON))
 		GameHBIRQHook2();
 	scanline++;
+
+										  
+  
+				  
+									
+   
+							  
+				
+	
+				 
+					
+		   
+	
+   
+				  
+  
+
 	if (scanline < 240) {
 		ResetRL(XBuf + (scanline*wss));
+
 	}
 	X6502_Run(16);
 	
@@ -1412,12 +2629,16 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 					if (vt03_mode)
 					{
 						vadr = ((spr->no & 1) << 15) + ((spr->no & 0xFE) << 5);
+										
 					}
 					if(vt03_mode)if((vadr<0x3fff)&&((spr->atr & 0x10) == 0x10))vadr += 0xA000;
 					if((vadr>0x4000)&&((spr->atr & 0x10) == 0x10))vadr += 0x2000;
 				}
 				else
 				{
+									 
+											  
+		   
 					vadr = (spr->no << 4) + vofs;
 					if(vt03_mode)vadr = (spr->no << 5) + vofs;
 					if((vadr<0x4000)&&(spr->atr & 0x10)&&!vt03_mode)vadr += 0x6000; //mod: meh
@@ -1438,6 +2659,7 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 					vadr += t & 8;
 				}
 				if (Sprite16&&(vadr&0x10&&vt03_mode))vadr += 0x10;
+					 
 	 
 				
 				if (MMC5Hack && geniestage != 1 && Sprite16) C = MMC5SPRVRAMADR(vadr);
@@ -1455,6 +2677,10 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 					else
 					{
 					if(vt03_mmc3_flag && vadr <0xA000) C = VRAMADR(vadr);
+	  
+
+					   
+	 
 					else C = &extra_ppu[vadr];
 					}
 				}
@@ -1463,11 +2689,15 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 			if (PPU_hook && ns < 8)
 			{
 				PPU_hook(0x10000);
+									
+							   
 		             PPU_hook(vadr);
 			}
 
 		dst->ca[1] = C[8];
 		if (PPU_hook && ns < 8) {
+									
+								
 			PPU_hook(vadr | 8);
 		}
 
@@ -1508,12 +2738,20 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 			spr.atr = SPRAM[n + 0x200];
 			spr.x = SPRAM[n + 0x300];
 
+		 
+													   
+												
+												 
+													 
+												 
+				 
 
 			if ((unsigned int)(scanline - spr.y) >= H) continue;
 
 			if (ns<maxsprites)
 			{
 				SPRB *dst = &SPRBUF[ns];
+								
 				if (n == 0)
 					sb = 1;
 
@@ -1528,14 +2766,27 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 					if (vt03_mode)
 					{
 						vadr = ((spr.no & 1) << 15) + ((spr.no & 0xFE) << 5);
+									   
 					}
 					if((vadr<0x4000)&&((spr.atr & 0x10) == 0x10))vadr += 0xA000;
+				  
+	  
 					if((vadr>0x4000)&&((spr.atr & 0x10) == 0x10))vadr += 0x4000;
+																 
+	 
+	  
+		 
+	  
+																 
+ 
+	  
+
 				}
 				else
 				{
 					vadr = (spr.no << 4) + vofs;
 					if (vt03_mode)vadr = (spr.no << 5) + vofs;
+												   
 					if((vadr<0x4000)&&(spr.atr & 0x10)&&!vt03_mode)vadr += 0x6000;
 					if((vadr<0x4000)&&(spr.atr & 0x10)&&vt03_mode)vadr += 0x8000;
 					if((vadr>0x3fff)&&(spr.atr & 0x10))vadr += 0x2000;
@@ -1575,7 +2826,9 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 					C = &extra_ppu[vadr];
 				}
 				if(!vt03_mmc3_flag && vt03_mode) C = &extra_ppu[vadr];
+															
 				}
+								   
 				dst->ca[0] = C[0];
 
 				if (PPU_hook && ns < 8)
@@ -1622,7 +2875,7 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 static void RefreshSprites(void) {
 	int n;
 	SPRB *spr;
-int ex_pal;
+int ex_pal = 0;
 	spork = 0;
 	if (!numsprites) return;
 
@@ -1642,15 +2895,29 @@ int ex_pal;
 	if(vt03_mode)	J = spr->ca[0] | spr->ca[1] | spr->ca[2] | spr->ca[3];
 	else J = spr->ca[0] | spr->ca[1];
 	
+				
 			for ( int z=0x20;  z<0x100; z++)
 			{
 			 if(PALRAM[z] !=0 && PALRAM[z] != PALRAM[0])ex_pal=1;
 			}
 			//mod: detect 3F20-3FFF write
 		 if(!sprites256)ex_pal=0;
-         if(ex_pal)VB = (PALRAM+0x10)+((atr&0xF)<<2);
-		 else VB = (PALRAM+0x10)+((atr&0x3)<<2);
-		 if(vt03_mode) VB = (PALRAM+0x40)+((atr&0xF)<<4); //16 colors?
+
+			if (vt03_mode)
+			{
+
+													  
+											  
+				VB = (PALRAM + 0x40) + ((atr & 0xF) << 4); //16 colors?
+				if (wscre)VB += 0x40;
+			}
+			else
+			{
+				if (ex_pal)VB = (PALRAM + 0x10) + ((atr & 0xF) << 2);
+				else VB = (PALRAM + 0x10) + ((atr & 0x3) << 2);
+			}
+			if (wss > 256) VB = (PALRAM + 0x10) + ((atr & 0x7) << 2);
+			if(vt03_mode && wscre)VB = (PALRAM + 0x80) + ((atr & 0x7) << 4);
 		 
 		 
 		
@@ -1674,7 +2941,7 @@ int ex_pal;
 							((J >> 7) & 0x01);
 
 		}
-			if(!ex_pal && !spr_add_flag && (wss>256)) x += ((atr&0x08)<<5); //mod: read attribute for spr.x hi byte
+			if( !spr_add_flag && (wss>256)) x += ((atr&0x08)<<5); //mod: read attribute for spr.x hi byte
             
 			C = sprlinebuf + x;
 
@@ -1871,26 +3138,24 @@ static void CopySprites(uint8 *target) {
 	uint8 *P = target;
 	if (!spork) return;
 	spork = 0;
-
-
+ 
 
  loopskie:
 	{
-			//	uint32 t = *(uint32*)(sprlinebuf + n);
-		if((priora[n] || !priora_bg[n]  )&& sprlinebuf[n] )
+		if((priora[n] || !priora_bg[n]  )&& (priora_bg[n] != 3) && sprlinebuf[n] && !priora_bg_3rd[n])
 				P[n] = sprlinebuf[n];
-		if((priora[n+1] || !priora_bg[n+1] )&& sprlinebuf[n+1])
+		if((priora[n+1] || !priora_bg[n+1] )&& (priora_bg[n+1] != 3) && sprlinebuf[n+1] && !priora_bg_3rd[n+1])
 				P[n + 1] = (sprlinebuf + 1)[n];
-		if((priora[n+2] || !priora_bg[n+2] )&& sprlinebuf[n+2])
+		if((priora[n+2] || !priora_bg[n+2] )&& (priora_bg[n+2] != 3) && sprlinebuf[n+2] && !priora_bg_3rd[n+2])
 				P[n + 2] = (sprlinebuf + 2)[n];
-			if((priora[n+3] || !priora_bg[n+3])&& sprlinebuf[n+3])
+			if((priora[n+3] || !priora_bg[n+3])&& (priora_bg[n+3]!=3) && sprlinebuf[n+3] && !priora_bg_3rd[n+3])
 				P[n + 3] = (sprlinebuf + 3)[n];
-			
 	}
 	n += 4;
 	if(n==wss) n=0;
 	if (n) goto loopskie;
 
+								 
 }
 
 void FCEUPPU_SetVideoSystem(int w) {
@@ -1898,29 +3163,38 @@ void FCEUPPU_SetVideoSystem(int w) {
 		scanlines_per_frame = dendy ? 262 : 312;
 		FSettings.FirstSLine = FSettings.UsrFirstSLine[1];
 		FSettings.LastSLine = FSettings.UsrLastSLine[1];
+																		  
 	} else {
 		scanlines_per_frame = 262;
 		FSettings.FirstSLine = FSettings.UsrFirstSLine[0];
 		FSettings.LastSLine = FSettings.UsrLastSLine[0];
+					  
 	}
 }
 
+					 
 void FCEUPPU_Init(void) {
 	makeppulut();
 }
 
+
+				  
 void FCEUPPU_Reset(void) {
 	VRAMBuffer = PPU[0] = PPU[1] = PPU_status = PPU[3] = 0;
-	for(int x = 0; x<0x10000; x++)extra_ppu[x] = 0;
-	for(int x = 0; x<0x20000; x++)
-		chrramm[x] = 0;
-		for(int x = 0; x<0x20; x++)
-		chrambank_V[x] = 0;
+	memset(extra_ppu, 0, 0x10000 );
+	memset(extra_ppu2, 0, 0x10000 );
+	memset(extra_ppu3, 0, 0x10000 );
+	memset(chrramm, 0, 0x20000 );
+memset(chrambank_V, 0, 0x20 );
+	
 	PPUSPL = 0;
 	PPUGenLatch = 0;
 	RefreshAddr = TempAddr = 0;
 	RefreshAddr2 = TempAddr2 = 32;
-	vtoggle = vtoggle2 = 0;
+	RefreshAddr3 = TempAddr3 = 32;
+	vtoggle = vtoggle2 = vtoggle3 =  0;
+	inc32_2nd = 0;
+	inc32_3nd = 0;
 	ppudead = 2;
 	kook = 0;
 	okk		= 0;
@@ -1932,21 +3206,46 @@ void FCEUPPU_Reset(void) {
 	 dmaread   = 0;
 	 dmawrite  = 0;
 	 dmalenght = 0;
-	
-	
+		if (vt03_mode)color_ful_stuff = 0xF;
+		else color_ful_stuff = 0x3;
+		if (wscre && vt03_mode)
+		{
+			shift_bg_1 = 0;
+				shift_bg_2 = 7;
+				
+		}
+		else
+		{
+			shift_bg_1 = 2;
+			shift_bg_2 = 3;
+			
+		}
+													 
+  
 }
 
 void FCEUPPU_Power(void) {
-	int x;
-	if(wscre) wss = 512; //mod: hmmm, can be change in future
+
+//	if(wscre) wss = 512; //mod: hmmm, can be change in future
+  			  
 	memset(NTARAM, 0x00, 0x800);
 	memset(NTARAM2, 0x00, 0x800);
+	memset(NTARAM3, 0x00, 0x800);
+	
+	memset(NTATRIB, 0x00, 0x1000);
+	memset(NTATRIB2, 0x00, 0x1000);
+	memset(NTATRIB3, 0x00, 0x1000);
+	
 	memset(PALRAM, 0x00, 0x100);
+		
 	memset(UPALRAM, 0x00, 0x03);
+
 	memset(SPRAM, 0x00, 0x400);
 	FCEUPPU_Reset();
+			   
+ 
 
-	for (x = 0x2000; x < 0x3000; x += 8) {
+	for (int x = 0x2000; x < 0x3000; x += 8) {
 		ARead[x] = A200x;
 		BWrite[x] = B2000;
 		ARead[x + 1] = A200x;
@@ -1964,7 +3263,7 @@ void FCEUPPU_Power(void) {
 		ARead[x + 7] = A2007;
 		BWrite[x + 7] = B2007;
 	}
-	if(!sprites256)for (x = 0x2000; x < 0x4000; x += 8) {
+	if(!sprites256)for (int x = 0x2000; x < 0x4000; x += 8) {
 		ARead[x] = A200x;
 		BWrite[x] = B2000;
 		ARead[x + 1] = A200x;
@@ -1987,6 +3286,11 @@ void FCEUPPU_Power(void) {
 	if(sprites256)   //mod: some codemaster games use 401C? hmm
 	{
 	
+						
+				
+	ARead[0x200F] = A200F;
+	ARead[0x3007] = A3007;
+	ARead[0x3017] = A3017;
 	BWrite[0x4018] = B4018;
 	BWrite[0x4019] = B4019;
 	BWrite[0x401B] = B401B;
@@ -1997,15 +3301,22 @@ void FCEUPPU_Power(void) {
 	BWrite[0x3005] = B3005;
 	BWrite[0x3006] = B3006;
 	BWrite[0x3007] = B3007;
+	BWrite[0x3010] = B3010;
+	BWrite[0x3015] = B3015;
+	BWrite[0x3016] = B3016;
+	BWrite[0x3017] = B3017;
 SetWriteHandler(0x4080, 0x40A0, CHRAMB);
 	}
 }
 
 
 int FCEUPPU_Loop(int skip) {
+
+
 	/* Needed for Knight Rider, possibly others. */
 	if (ppudead) {
 		memset(XBuf, 0x0, 512 * 240);
+									
 		X6502_Run(scanlines_per_frame * (256 + 85));
 		ppudead--;
 	} else {
@@ -2034,14 +3345,7 @@ int FCEUPPU_Loop(int skip) {
 				overclocked = 0;
 			}
 		}
-		else if(vblankscanlines)
-		{
-						if (!DMC_7bit || !skip_7bit_overclocking) {
-				overclocked = 1;
-				X6502_Run(vblines * (256 + 85) - 12);
-				overclocked = 0;
-						}
-		}
+
 		PPU_status &= 0x1f;
 		X6502_Run(256);
 
@@ -2064,12 +3368,18 @@ int FCEUPPU_Loop(int skip) {
 				if (PPU_hook) PPU_hook(RefreshAddr & 0xffff);
 				RefreshAddr2 = TempAddr2;
 				if (PPU_hook) PPU_hook(RefreshAddr2 & 0xffff);
+				RefreshAddr3 = TempAddr3;
+				if (PPU_hook) PPU_hook(RefreshAddr3 & 0xffff);
+												
+												
 			}
 
 			/* Clean this stuff up later. */
 			spork = numsprites = 0;
 			ResetRL(XBuf);
 
+								   
+					 
 			X6502_Run(16 - kook);
 			kook ^= 1;
 		}
@@ -2110,6 +3420,12 @@ int FCEUPPU_Loop(int skip) {
 			else
 				totalscanlines = normal_scanlines + (overclock_state ? extrascanlines : 0);
 
+														  
+																					 
+										
+		 
+																						
+				  
 			if (exscanlines)totalscanlines = 240 + exscanlines;
 			for (scanline = 0; scanline < totalscanlines; ) {	/* scanline is incremented in  DoLine.  Evil. :/ */
 				deempcnt[deemp]++;
@@ -2119,12 +3435,19 @@ int FCEUPPU_Loop(int skip) {
 					overclocked = 0;
 				else {
 
+																	
+					   
+			
 					overclocked = 1;
 				}
 			}
 
 			DMC_7bit = 0;
+
 			if (MMC5Hack && (ScreenON || SpriteON)) MMC5_hb(scanline);
+
+																					
+				  
 			for (x = 1, max = 0, maxref = 0; x < 7; x++) {
 				if (deempcnt[x] > max) {
 					max = deempcnt[x];
@@ -2149,7 +3472,8 @@ int FCEUPPU_Loop(int skip) {
 }
 
 uint8 palm[256*3];
-static uint16 TempAddrT, RefreshAddrT, TempAddrT2, RefreshAddrT2;
+
+static uint16 TempAddrT, RefreshAddrT, TempAddrT2, RefreshAddrT2, TempAddrT3, RefreshAddrT3;
 
 void FCEUPPU_LoadState(int version) {
 		for(int i = 0; i<256; i++)
@@ -2163,32 +3487,50 @@ void FCEUPPU_LoadState(int version) {
 	RefreshAddr = RefreshAddrT;
 	TempAddr2 = TempAddrT2;
 	RefreshAddr2 = RefreshAddrT2;
+		TempAddr3 = TempAddrT3;
+	RefreshAddr3 = RefreshAddrT3;
 }
+
 
 SFORMAT FCEUPPU_STATEINFO[] = {
 	{ NTARAM, 0x800, "NTAR" },
 	{ NTARAM2, 0x800, "NTR2" },
+{ NTARAM3, 0x800, "NTR3" },
+	{ NTATRIB, 0x1000, "NTRB" },
+	{ NTATRIB2, 0x1000, "NTB2" },
+	{ NTATRIB3, 0x1000, "NTB3" },
 	{ PALRAM, 0x100, "PRAM" },
+	{spr_add_atr, 0x100, "SADR"},
 	{ palm, 256*3, "PALM" },
 	{ SPRAM, 0x400, "SPRA" },
 	{ extra_ppu, 0x10000, "EXPPU" },
 	{ chrramm, 0x20000, "CHRMM" },
 	{ chrambank_V, 0x20, "CHRBK" },
+	{ extra_ppu2, 0x10000, "EXPD" },
+	{ extra_ppu3, 0x10000, "EXPT" },
 	{ PPU, 0x4, "PPUR" },
 	{ &kook, 1, "KOOK" },
+	{ &inc32_2nd, 1, "INC2" },
+	{ &inc32_3nd, 1, "INC3" },
 	{ &stopclock, 1, "FLAGV" },
 	{ &ppudead, 1, "DEAD" },
-	{ &PPUSPL, 1, "PSPL" },
 	{ &XOffset, 1, "XOFF" },
-	{ &XOffset2, 1, "XOFFF" },
+	{ &PPUSPL, 1, "PSPL" },
+	{ &spr_add_flag, 1, "SDFL" },
+	{ &XOffset2, 1, "XOF2" },
+	{ &XOffset3, 1, "XOF3" },
 	{ &vtoggle, 1, "VTGL" },
 	{ &vtoggle2, 1, "VTLL" },
+	{ &vtoggle3, 1, "VTLT" },
 	{ &RefreshAddrT, 2 | FCEUSTATE_RLSB, "RADD" },
 	{ &TempAddrT, 2 | FCEUSTATE_RLSB, "TADD" },
 	{ &RefreshAddrT2, 2 | FCEUSTATE_RLSB, "RADU" },
 	{ &TempAddrT2, 2 | FCEUSTATE_RLSB, "TADU" },
+		{ &RefreshAddrT3, 2 | FCEUSTATE_RLSB, "RADT" },
+	{ &TempAddrT3, 2 | FCEUSTATE_RLSB, "TADT" },
 	{ &VRAMBuffer, 1, "VBUF" },
 	{ &PPUGenLatch, 1, "PGEN" },
+							  
 	{ &okk, 1, "POKK" },
 	{ &minus_line, 1, "MINL" },
 	{ &colrnum, 1, "COLR" },
@@ -2203,6 +3545,7 @@ SFORMAT FCEUPPU_STATEINFO[] = {
 };
 
 
+
 void FCEUPPU_SaveState(void) {
 	for(int i = 0; i<256; i++)
 	{
@@ -2214,4 +3557,26 @@ void FCEUPPU_SaveState(void) {
 	RefreshAddrT = RefreshAddr;
 	TempAddrT2 = TempAddr2;
 	RefreshAddrT2 = RefreshAddr2;
+	TempAddrT3 = TempAddr3;
+	RefreshAddrT3 = RefreshAddr3;				
+							  
 }
+
+							
+ 
+
+							
+ 
+							 
+ 
+
+
+							 
+ 
+					   
+
+												 
+
+				 
+ 
+

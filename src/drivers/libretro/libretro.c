@@ -63,7 +63,7 @@ static bool overscan_v = true;
 static bool up_down_allowed = false;
 static bool use_raw_palette;
 static bool use_par;
-static bool enable_4player = false;
+static bool enable_4player = true;
 static unsigned turbo_enabler[MAX_PLAYERS] = {1};
 static unsigned turbo_delay = 0;
 static unsigned input_type[MAX_PLAYERS + 1] = {0}; /* 4-players + famicom expansion */
@@ -80,7 +80,7 @@ unsigned skip_7bit_overclocking = 1; /* 7-bit samples have priority over overclo
 unsigned totalscanlines = 0;
 unsigned normal_scanlines = 240;
 unsigned extrascanlines = 0;
-unsigned vblankscanlines = 0;
+int vblankscanlines = 0;
 static uint32_t Dummy = 0;
 static unsigned is_PAL = 0;
 static unsigned setregion = 0;
@@ -844,9 +844,9 @@ void retro_get_system_info(struct retro_system_info *info)
    info->need_fullpath    = false;
    info->valid_extensions = "fds|nes|unf|unif|nesm";
 #ifdef GIT_VERSION
-   info->library_version  = "(0.9.45.1.0.0.C0)" GIT_VERSION;
+   info->library_version  = "(0.9.45.1.0.0.D7a)" GIT_VERSION;
 #else
-   info->library_version  = "(0.9.45.1.0.0.C0)";
+   info->library_version  = "(0.9.45.1.0.0.D7a)";
 #endif
    info->library_name     = "FCEUmmod";
    info->block_extract    = false;

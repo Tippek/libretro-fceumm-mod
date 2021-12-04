@@ -77,6 +77,21 @@ static INLINE uint8 RdMemNorm(uint32 A) {
 	return(_DB = ARead[A](A));
 }
 
+
+static INLINE uint8 RdMemFake(unsigned int A)
+{
+    if (!extra_bank_unrom)
+    {
+        return(_DB=ARead[A](A));
+    }
+    else
+    {
+      //  FCEU_printf("read ROM address: %06x, data: %02x, custom bank: %02x, current bank: %02x\n", (0x8000 * fake_bank + (A - 0x8000)), romdata[0x8000 * fake_bank + (A - 0x8000)], fake_bank, current_aorom_bank);
+        if((fake_bank==current_aorom_bank) || (A<0x8000)) return(_DB=ARead[A](A));
+        else return(_DB=romdata[0x8000*fake_bank+A-0x8000]);
+}
+}
+#define RdMem_F RdMemFake
 static INLINE void WrMemNorm(uint32 A, uint8 V) {
 	BWrite[A](A, V);
 }
@@ -111,8 +126,10 @@ uint8 FASTAPASS(1) X6502_DMR(uint32 A) {
 	ADDCYC(1);
 	return(X.DB = ARead[A](A));
 }
-uint8 FASTAPASS(1) X6502_DMR2(uint32 A) {
-	return(X.DB = ARead[A](A));
+uint8 FASTAPASS(1) X6502_DMR2(uint32 A, uint16 B)
+{
+    if (B&0x100) return B&0xFF;
+ return(X.DB=ARead[A](A));
 }
 void FASTAPASS(2) X6502_ADDCYC(uint32 A) {
 		ADDCYC(A);	
@@ -156,8 +173,13 @@ static uint8 ZNTable[256];
 	} else _PC++;									\
 }
 
-#define DMA   _A = _A*x;X_ZN(_A) 	//mod: Dimension by A
-#define DVA   _A = _A/x;X_ZN(_A)	//mod: Division by A
+#define DMA   _A = _A*x;X_ZN(_A) 	//mod: Dimension by A  //mod: Division by A //prevent divide by zero
+#define DVA  {           \
+    if (x) 	\
+	{		\
+		_A = _A/x; X_ZN(_A);	\
+	}	\	
+}										
 #define DAV  if(x)_A = _A%x;X_ZN(_A);	//mod: well another division option
 
 #define INNY  {  \
@@ -360,12 +382,12 @@ redundant) on the variable "x".
 #define LD_ZPY(op)  {uint8 A; uint8 x; GetZPI(A,_Y); x=RdRAM(A); op; break;}
 #define LD_ZPZ(op)  {uint8 A; uint8 x; GetZPI(A,_Z); x=RdRAM(A); op; break;}
 #define LD_AB(op)  {unsigned int A; uint8 x; GetAB(A); x=RdMem(A); op; break; }
-#define LD_ABI(reg,op)  {unsigned int A; uint8 x; GetABIRD(A,reg); x=RdMem(A); op; break;}
+#define LD_ABI(reg,op)  {unsigned int A; uint8 x; GetABIRD(A,reg); x=RdMem_F(A); op; break;}
 #define LD_ABX(op)  LD_ABI(_X,op)
 #define LD_ABY(op)  LD_ABI(_Y,op)
 #define LD_ABZ(op)  LD_ABI(_Z,op)
-#define LD_IX(op)  {unsigned int A; uint8 x; GetIX(A); x=RdMem(A); op; break;}
-#define LD_IY(op)  {unsigned int A; uint8 x; GetIYRD(A); x=RdMem(A); op; break;}
+#define LD_IX(op)  {unsigned int A; uint8 x; GetIX(A); x=RdMem_F(A); op; break;}
+#define LD_IY(op)  {unsigned int A; uint8 x; GetIYRD(A); x=RdMem_F(A); op; break;}
 
 #define ST_ZP(r)  {uint8 A; GetZP(A); WrRAM(A,r); break;}
 #define ST_ZPX(r)  {uint8 A; GetZPI(A,_X); WrRAM(A,r); break;}
