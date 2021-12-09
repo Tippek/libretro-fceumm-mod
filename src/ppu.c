@@ -59,12 +59,12 @@ static void FetchSpriteData(void);
 static void FASTAPASS(1) RefreshLine(int lastpixel);
 static void RefreshSprites(void);
 static void CopySprites(uint8 *target);
-int sprites256;
-int exscanlines;
-int vblines;
-int vt03_mmc3_flag;
-int vt03_mode;
-int wscre, wssub;
+int sprites256 = 0;
+int exscanlines = 0;
+int vblines = 0;
+int vt03_mmc3_flag = 0;
+int vt03_mode = 0;
+int wscre, wssub = 0;
 int wscre_32 = 0x7FF;
 int wscre_32_2_3 = 0x7FF;
 int wscre_new = 0;
@@ -109,14 +109,13 @@ uint8 color_ful_stuff = 0x3;
 																   
 																	
 uint8 priora_bg[272+256];
-uint8 priora_main[272 + 256];
 uint8 priora_bg_3rd[272 + 256];
 uint8 priora[256+256+16];
-uint8 stopclock;
+uint8 stopclock = 0;
 									   
 								 
 									   
-uint8 spr_add_flag;
+uint8 spr_add_flag = 0;
 uint8 spr_add_atr[0x100];
 static void Fixit1(void);
 static void Fixit12(void);
@@ -135,8 +134,8 @@ uint8 extra_ppu2[0x10000];
 uint8 extra_ppu3[0x10000];
 uint8 chrramm[0x20000];
 uint8 chrambank_V[0x20];
-uint8 inc32_2nd;
-uint8 inc32_3nd;
+uint8 inc32_2nd = 0;
+uint8 inc32_3nd = 0;
 						   
 					   
 								  
@@ -248,7 +247,7 @@ static int maxsprites = 8; //mod: who need limits?
 							//mod: Felix Cat require limit...okay
 
 /* scanline is equal to the current visible scanline we're on. */
-int scanline;
+int scanline = 0;
 				
 static uint32 scanlines_per_frame;
 
@@ -1978,7 +1977,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 	static uint32 pshift2[4];
 	static uint32 pshift3[4];
 	static uint32 atlatch;
-	static uint32 atrib;
+	static uint32 atrib  = 0;
 	static uint32 atlatch2;
 	static uint32 atlatch3;
 	uint32 smorkus = RefreshAddr;
