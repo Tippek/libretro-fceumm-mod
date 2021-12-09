@@ -89,9 +89,9 @@ else pixdata |= ppulut3[XOffset | (atlatch << 3)];
 	priora_bg_3rd[x] = 0;
 }
 
-uint32 pixdata_ex;
-uint32 pixdata2_ex;
-uint32 pixdata3_ex;
+uint32 pixdata_ex  = 0;
+uint32 pixdata2_ex = 0;
+uint32 pixdata3_ex = 0;
 	if(wscre) 	 
 	{
 	pixdata_ex = ppulut6[XOffset| (atlatch << 3)];
