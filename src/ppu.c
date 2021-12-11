@@ -69,43 +69,11 @@ int wscre_32 = 0x7FF;
 int wscre_32_2_3 = 0x7FF;
 int wscre_new = 0;
 				 
-				
-				  
-				 
-				
-				
-				  
-				 
-			  
-				 
-					
-				  
-				  
-				  
-				   
-				  
-   
-
-
-						   
-														 
-													  
-																
-																	
-														 
-
-												 
-												 
-														
-																			   
-
-								   
-								   
-
+			
 							
 uint8 shift_bg_1 = 2;
 uint8 shift_bg_2 = 3;
-uint8 color_ful_stuff = 0x3;
+
 																   
 																	
 uint8 priora_bg[272+256];
@@ -3205,19 +3173,18 @@ memset(chrambank_V, 0, 0x20 );
 	 dmaread   = 0;
 	 dmawrite  = 0;
 	 dmalenght = 0;
-		if (vt03_mode)color_ful_stuff = 0xF;
-		else color_ful_stuff = 0x3;
+
 		if (wscre && vt03_mode)
 		{
-			shift_bg_1 = 0;
-				shift_bg_2 = 7;
+			shift_bg_1 = 4;
+				shift_bg_2 = 0xF;
 				
 		}
 		else
 		{
-			shift_bg_1 = 2;
-			shift_bg_2 = 3;
-			
+			if(!vt03_mode)shift_bg_1 = 2;
+			else shift_bg_1 = 4;
+			shift_bg_2 = 0xF;
 		}
 													 
   

@@ -100,71 +100,33 @@ uint32 pixdata3_ex = 0;
 			prior3 = ppulut3[XOffset3| (prior_flag << 3)];
 	}
 
-if(!wscre)
-{
-
-if(!vt03_mode) 
-{
-
-tmp2 = 0;
-tmp3 = 0;
-pixdata2 = pixdata3 = 0;
-}
 for(int x = 0; x<8; x++)
 {
-if(pixdata3&color_ful_stuff)
+	
+if(pixdata3&0xF)
 {
-P[x] = S[pixdata3 & 0xF | (((tmp3>>shift_bg_1)&shift_bg_2)<<4)]; 
-priora_bg_3rd[X1*8-16+x] = 1;
+P[x] = S[pixdata3 & 0xF | (((pixdata3_ex)&shift_bg_2)<<shift_bg_1)]; 
+if(!(prior3&0xF) && ((pixdata3 & 0xF) | (((pixdata3_ex)&0xF)<<4)))priora_bg_3rd[X1*8+x] = 1;
 }
-else if(pixdata & color_ful_stuff)
+else if(pixdata & 0xF)
 {
-P[x] = S[pixdata & 0xF | (((tmp>>shift_bg_1)&shift_bg_2)<<4)];
-if(pixdata & color_ful_stuff)
-priora_bg[X1*8-16+x] = 1;
+P[x] = S[pixdata & 0xF | (((pixdata_ex)&shift_bg_2)<<shift_bg_1)];
+if(pixdata & 0xF)
+priora_bg[X1*8+x] = 1  | ((atrib&0x20)>>4); 
 }
-else if(pixdata2 & color_ful_stuff)
-P[x] =  S[(pixdata2 & 0xF) | (((tmp2>>shift_bg_1)&shift_bg_2)<<4)];
-else P[x] = S[pixdata & 0xF | (((tmp>>shift_bg_1)&shift_bg_2)<<4)];
-
+else if(pixdata2 & 0xF)
+P[x] =  S[(pixdata2 & 0xF) | (((pixdata2_ex)&shift_bg_2)<<shift_bg_1)];
+else P[x] = S[0];
+	prior3 >>= 4;
 	pixdata >>= 4;
 	pixdata2 >>= 4;
 	pixdata3 >>= 4;
-	tmp >>= 4;
-	tmp2 >>=4;
-	tmp3 >>=4;
+	pixdata_ex >>= 4;
+	pixdata2_ex >>=4;
+	pixdata3_ex >>=4;
+	
 }
 
-
-}
-else 
-{
-
-for(int x = 0; x<8; x++)
-{
-if((pixdata3 & color_ful_stuff))
-{
-P[x] = S[(pixdata3 & 0xF) | (((pixdata3_ex)&0xF)<<4)];
-if(!(prior3&0xF) && (pixdata3 & 0xF) )priora_bg_3rd[X1*8-16+x] = 1;
-}
-else if((pixdata & color_ful_stuff))
-{
-P[x] = S[(pixdata & 0xF) | (((pixdata_ex)&0xF)<<4)];
-if(pixdata & color_ful_stuff)priora_bg[X1*8-16+x] = 1 | ((atrib&0x20)>>4);
-}
-else if((pixdata2 & color_ful_stuff)) P[x] =  S[(pixdata2 & 0xF) | (((pixdata2_ex)&0xF)<<4)];
-else P[x] = S[0];
-prior3 >>=4;
-pixdata >>= 4;
-pixdata_ex >>= 4;
-pixdata2 >>= 4;
-pixdata2_ex >>= 4;
-pixdata3 >>= 4;
-pixdata3_ex >>= 4;
-
-
-}
-}
 }
 
 if (X1 >= 2)
