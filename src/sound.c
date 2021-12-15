@@ -1567,7 +1567,7 @@ SFORMAT FCEUSND_STATEINFO[] = {
   {&DACFreqHi, 1, "6FRH"},
 
   {&DACHaveDMA, 1, "6HVDM"},
-  {&DACDMABuf, 1, "DACDMABuf"},
+  {&DACDMABuf, 1, "DACDB"},
   {&DACHaveSample, 1, "7HVSP"},
 
   {&DACAddressLo, 1, "6SZL"},

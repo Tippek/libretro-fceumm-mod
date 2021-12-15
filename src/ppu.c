@@ -68,8 +68,8 @@ int wscre, wssub = 0;
 int wscre_32 = 0x7FF;
 int wscre_32_2_3 = 0x7FF;
 int wscre_new = 0;
-				 
-			
+int is_2_bg = 0;				 
+int is_3_bg = 0;				
 							
 uint8 shift_bg_1 = 2;
 uint8 shift_bg_2 = 3;
@@ -632,6 +632,7 @@ static DECLFW(B2001) {
 }
 
 static DECLFW(B3017) {
+    is_3_bg = 1;
 	uint32 tmp = RefreshAddr3 & 0xFFFF;
 	//FCEUPPU_LineUpdate();
 	PPUGenLatch3 = V;
@@ -753,6 +754,7 @@ static DECLFW(B3017) {
 }
 void B3007_ex(uint32 A, uint8 V)
 {
+    is_2_bg = 1;
 	uint32 tmp = RefreshAddr2 & 0xFFFF;
 	extra_ppu2[tmp] = V;
 	if (wscre_new && tmp>0x1FFF && tmp<0x4000)
@@ -865,6 +867,7 @@ void B3007_ex(uint32 A, uint8 V)
 }
 void B3017_ex(uint32 A, uint8 V)
 {
+    is_3_bg = 1;
 	uint32 tmp = RefreshAddr3 & 0xFFFF;
 	extra_ppu3[tmp] = V;
 	if (wscre_new && tmp > 0x1FFF && tmp < 0x4000)
@@ -1330,6 +1333,7 @@ else
 }
 
 static DECLFW(B3007) {
+    is_2_bg = 1;
 	uint32 tmp = RefreshAddr2&0xFFFF;
 	
 	PPUGenLatch2 = V;
@@ -1789,14 +1793,8 @@ X6502_ADDCYC(512);
 			
 		for(x=0;x<1024;x++)
 			{
-		V = ARead[t+x](t+x);
-//	if (PPUSPL >= 8) {
-//		if (PPU[3] >= 8)
-//			SPRAM[PPU[3]] = V;
-//	} else {
-		SPRAM[PPUSPL] = V;
-//	}
-	PPUGenLatch = V;
+		SPRAM[PPUSPL] = ARead[t+x](t+x);
+	PPUGenLatch = SPRAM[PPUSPL];
 	PPU[3]++;
 	PPUSPL++;
     PPU[3] %= 0x400;
@@ -1996,10 +1994,12 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 	else
 		vofs = ((PPU[0] & 0x10) << 8) | ((RefreshAddr >> 12) & 7);
 	
-	if(vt03_mode)vofs = ((PPU[0] & 0x10) << 11) | ((RefreshAddr >> 12) & 7);
-	if(vt03_mode)vofs2 = ((0x0) << 11) | ((RefreshAddr2 >> 12) & 7);
-			  
-	if (vt03_mode)vofs3 = ((0) << 8) | ((RefreshAddr3 >> 12) & 7);
+	if(vt03_mode)
+    {
+    vofs = ((PPU[0] & 0x10) << 11) | ((RefreshAddr >> 12) & 7);
+	vofs2 =  (RefreshAddr2 >> 12) & 7;
+	vofs3 =  (RefreshAddr3 >> 12) & 7;
+    }
 	if (!ScreenON && !SpriteON) {
 		uint32 tem;
 		tem = Pal[0] | (Pal[0] << 8) | (Pal[0] << 16) | (Pal[0] << 24);
@@ -2312,7 +2312,7 @@ static INLINE void Fixit22(void) {
 	}
 }
 static INLINE void Fixit23(void) {
-	if (!vt03_mode) return;
+	if(!vt03_mode) return;
 	if (ScreenON || SpriteON) {
 		uint32 rad = RefreshAddr3;
 		if(rad)
@@ -2518,7 +2518,21 @@ static void DoLine(void)
 		GameHBIRQHook2();
 	scanline++;
 
-										  
+    if (scanline == 240)
+	{
+		overclocked = 1;
+		for (int x = exscanlines; x > 0; x--)
+		{
+			X6502_Run((256 + 69 + 16));
+			if (DMC_7bit)
+			{
+				DMC_7bit = 0;
+				overclocked = 0;
+				return;
+			}
+		}
+		overclocked = 0;
+	}							  
   
 				  
 									
@@ -2562,8 +2576,9 @@ static void FetchSpriteData(void) {
 
 	ns = sb = 0;
 
-	vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 9;
+	
 if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12; //mod: if/else faster?
+else vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 9;
 	H += (P0 & 0x20) >> 2;
 
 	if (!sprites256) {
@@ -2593,24 +2608,13 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 
 				if (Sprite16) {
 					vadr = ((spr->no & 1) << 12) + ((spr->no & 0xFE) << 4);
-					if (vt03_mode)
-					{
-						vadr = ((spr->no & 1) << 15) + ((spr->no & 0xFE) << 5);
-										
-					}
-					if(vt03_mode)if((vadr<0x3fff)&&((spr->atr & 0x10) == 0x10))vadr += 0xA000;
-					if((vadr>0x4000)&&((spr->atr & 0x10) == 0x10))vadr += 0x2000;
 				}
 				else
 				{
 									 
-											  
-		   
+											 
 					vadr = (spr->no << 4) + vofs;
-					if(vt03_mode)vadr = (spr->no << 5) + vofs;
-					if((vadr<0x4000)&&(spr->atr & 0x10)&&!vt03_mode)vadr += 0x6000; //mod: meh
-					if((vadr<0x4000)&&(spr->atr & 0x10)&&vt03_mode)vadr += 0x8000;
-					if((vadr<0x4000)&&(spr->atr & 0x10))vadr += 0x6000;
+					
 				}
 				
 				if (spr->atr&V_FLIP)
@@ -2632,24 +2636,15 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 				if (MMC5Hack && geniestage != 1 && Sprite16) C = MMC5SPRVRAMADR(vadr);
 				else 
 				{				
-					if(vadr<0x2000)
-					{
+				
 						
 						if(chrambank_V[vadr>>8])
 						C = &chrramm[(chrambank_V[vadr>>8]<<8)|(vadr&0xFF)];
 							else
 						C = VRAMADR(vadr);
 						
-					}
-					else
-					{
-					if(vt03_mmc3_flag && vadr <0xA000) C = VRAMADR(vadr);
-	  
+					
 
-					   
-	 
-					else C = &extra_ppu[vadr];
-					}
 				}
 			dst->ca[0] = C[0];
 
@@ -2838,7 +2833,25 @@ if(vt03_mode)vofs = (unsigned int)(P0 & 0x8 & (((P0 & 0x20) ^ 0x20) >> 2)) << 12
 	numsprites = ns;
 	SpriteBlurp = sb;
 }
-
+static const unsigned char BitReverseTable256[] = 
+{
+  0x00, 0x80, 0x40, 0xC0, 0x20, 0xA0, 0x60, 0xE0, 0x10, 0x90, 0x50, 0xD0, 0x30, 0xB0, 0x70, 0xF0, 
+  0x08, 0x88, 0x48, 0xC8, 0x28, 0xA8, 0x68, 0xE8, 0x18, 0x98, 0x58, 0xD8, 0x38, 0xB8, 0x78, 0xF8, 
+  0x04, 0x84, 0x44, 0xC4, 0x24, 0xA4, 0x64, 0xE4, 0x14, 0x94, 0x54, 0xD4, 0x34, 0xB4, 0x74, 0xF4, 
+  0x0C, 0x8C, 0x4C, 0xCC, 0x2C, 0xAC, 0x6C, 0xEC, 0x1C, 0x9C, 0x5C, 0xDC, 0x3C, 0xBC, 0x7C, 0xFC, 
+  0x02, 0x82, 0x42, 0xC2, 0x22, 0xA2, 0x62, 0xE2, 0x12, 0x92, 0x52, 0xD2, 0x32, 0xB2, 0x72, 0xF2, 
+  0x0A, 0x8A, 0x4A, 0xCA, 0x2A, 0xAA, 0x6A, 0xEA, 0x1A, 0x9A, 0x5A, 0xDA, 0x3A, 0xBA, 0x7A, 0xFA,
+  0x06, 0x86, 0x46, 0xC6, 0x26, 0xA6, 0x66, 0xE6, 0x16, 0x96, 0x56, 0xD6, 0x36, 0xB6, 0x76, 0xF6, 
+  0x0E, 0x8E, 0x4E, 0xCE, 0x2E, 0xAE, 0x6E, 0xEE, 0x1E, 0x9E, 0x5E, 0xDE, 0x3E, 0xBE, 0x7E, 0xFE,
+  0x01, 0x81, 0x41, 0xC1, 0x21, 0xA1, 0x61, 0xE1, 0x11, 0x91, 0x51, 0xD1, 0x31, 0xB1, 0x71, 0xF1,
+  0x09, 0x89, 0x49, 0xC9, 0x29, 0xA9, 0x69, 0xE9, 0x19, 0x99, 0x59, 0xD9, 0x39, 0xB9, 0x79, 0xF9, 
+  0x05, 0x85, 0x45, 0xC5, 0x25, 0xA5, 0x65, 0xE5, 0x15, 0x95, 0x55, 0xD5, 0x35, 0xB5, 0x75, 0xF5,
+  0x0D, 0x8D, 0x4D, 0xCD, 0x2D, 0xAD, 0x6D, 0xED, 0x1D, 0x9D, 0x5D, 0xDD, 0x3D, 0xBD, 0x7D, 0xFD,
+  0x03, 0x83, 0x43, 0xC3, 0x23, 0xA3, 0x63, 0xE3, 0x13, 0x93, 0x53, 0xD3, 0x33, 0xB3, 0x73, 0xF3, 
+  0x0B, 0x8B, 0x4B, 0xCB, 0x2B, 0xAB, 0x6B, 0xEB, 0x1B, 0x9B, 0x5B, 0xDB, 0x3B, 0xBB, 0x7B, 0xFB,
+  0x07, 0x87, 0x47, 0xC7, 0x27, 0xA7, 0x67, 0xE7, 0x17, 0x97, 0x57, 0xD7, 0x37, 0xB7, 0x77, 0xF7, 
+  0x0F, 0x8F, 0x4F, 0xCF, 0x2F, 0xAF, 0x6F, 0xEF, 0x1F, 0x9F, 0x5F, 0xDF, 0x3F, 0xBF, 0x7F, 0xFF
+};
 static void RefreshSprites(void) {
 	int n;
 	SPRB *spr;
@@ -2913,187 +2926,67 @@ int ex_pal = 0;
 			C = sprlinebuf + x;
 
 	uint8 lx = J;
+		uint8 color_flag = vt03_mode ? 0xF : 0x3;
 	if(!(atr & SP_BACK))
+    {
+        uint32 tmp_p = pixdata;
+	if(atr&H_FLIP)
+		for( int y = x+7; y>(x-1); y--)
+		{
+		if(lx&0x80)
+		   priora[y] = tmp_p & color_flag;
+           tmp_p >>= 4;
+		   lx<<=1;
+		}
+	else
 		for( int y = x; y<(x+8); y++)
 		{
-			if(lx&0x80)
-			if(atr&H_FLIP)
-			{
-				priora[x+x+7-y] = 1;
-
-			}
-			else
-			{
-				priora[y] = 1;
-			}
-
-			lx <<=1;
+		if(lx&0x80)
+		   priora[y] = tmp_p & color_flag;
+	       tmp_p >>= 4;
+	       lx<<=1;
 		}
-     if(vt03_mode){
+    }
+
+     
 		 if (atr&H_FLIP)
          {
-	   if(J & 0x80) {C[7]=VB[pixdata&0xF];
-		if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+7] = 1;
-		else priora[x+7] = 0;}
+	       if(J & 0x80)C[7]=VB[pixdata&color_flag];
+		   pixdata>>=4;
+		   if(J & 0x40)C[6]=VB[pixdata&color_flag];
            pixdata>>=4;
-	   if(J & 0x40){ C[6]=VB[pixdata&0xF];
-	   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+6] = 1;
-	   else priora[x+6] = 0;}
+           if(J & 0x20)C[5]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x20){ C[5]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+5] = 1;
-		   else priora[x+5] = 0;}
+           if(J & 0x10)C[4]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x10){ C[4]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+4] = 1;
-		   else priora[x+4] = 0;}
+           if(J & 0x08)C[3]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x08){ C[3]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+3] = 1;
-		   else priora[x+3] = 0;}
+           if(J & 0x04)C[2]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x04){ C[2]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+2] = 1;
-		   else priora[x+2] = 0;}
+           if(J & 0x02)C[1]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x02) {C[1]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+1] = 1;
-		   else priora[x+1] = 0;}
-           pixdata>>=4;
-           if(J & 0x01) {C[0]=VB[pixdata]; 
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x] = 1;
-		   else priora[x] = 0;}
+           if(J & 0x01)C[0]=VB[pixdata&color_flag]; 
          } else  {
-	   if(J & 0x80){ C[0]=VB[pixdata&0xF];
-	   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x] = 1;
-	   else priora[x] = 0;}
+	       if(J & 0x80)C[0]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x40) {C[1]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+1] = 1;
-		   else priora[x+1] = 0;}
+           if(J & 0x40)C[1]=VB[pixdata&color_flag];
            pixdata>>=4;
-	   if(J & 0x20){ C[2]=VB[pixdata&0xF];
-	   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+2] = 1;
-	   else priora[x+2] = 0;}
+		   if(J & 0x20)C[2]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x10){ C[3]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+3] = 1;
-		   else priora[x+3] = 0;}
+           if(J & 0x10)C[3]=VB[pixdata&color_flag];
            pixdata>>=4;
-		   if(J & 0x08){ C[4]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+4] = 1;
-		   else priora[x+4] = 0;}
+		   if(J & 0x08)C[4]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x04){ C[5]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+5] = 1;
-		   else priora[x+5] = 0;}
+           if(J & 0x04)C[5]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x02){ C[6]=VB[pixdata&0xF];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+6] = 1;
-		   else priora[x+6] = 0;}
+           if(J & 0x02)C[6]=VB[pixdata&color_flag];
            pixdata>>=4;
-           if(J & 0x01){ C[7]=VB[pixdata];
-		   if(!(atr & SP_BACK) && (pixdata&0xF)) priora[x+7] = 1;
-		   else priora[x+7] = 0;}
+           if(J & 0x01)C[7]=VB[pixdata&color_flag];
+
          }
-        }
+        
 					   
-     else{
-		 if (atr&H_FLIP)
-        {
-	   if(J & 0x80){ C[7]=VB[pixdata&3];
-	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+7] = 1;
-	   else priora[x+7] = 0;}
-          pixdata>>=4;
-	   if(J & 0x40){ C[6]=VB[pixdata&3];
-	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+6] = 1;
-	   else priora[x+6] = 0;}
-          pixdata>>=4;
-          if(J & 0x20) {C[5]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+5] = 1;
-		  else priora[x+5] = 0;}
-          pixdata>>=4;
-          if(J & 0x10){ C[4]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+4] = 1;
-		  else priora[x+4] = 0;}
-          pixdata>>=4;
-          if(J & 0x08) {C[3]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+3] = 1;
-		  else priora[x+3] = 0;}
-          pixdata>>=4;
-          if(J & 0x04) 
-			  {C[2]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+2] = 1;
-		  else priora[x+2] = 0;}
-          pixdata>>=4;
-          if(J & 0x02) 
-			  {
-				  C[1]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+1] = 1;
-		   else priora[x+1] = 0;
-		  }
-          pixdata>>=4;
-          if(J & 0x01) 
-			  {
-				  C[0]=VB[pixdata];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x] = 1;
-		   else priora[x] = 0;
-		  }
-        } else  {
-	   if(J & 0x80)
-		   {
-			   C[0]=VB[pixdata&3];
-	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x] = 1;
-	    else priora[x] = 0;
-	   }
-          pixdata>>=4;
-          if(J & 0x40) {C[1]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+1] = 1;
-		  else priora[x+1] = 0;}
-          pixdata>>=4;
-	   if(J & 0x20) 
-		   {
-			   C[2]=VB[pixdata&3];
-	   if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+2] = 1;
-	    else priora[x+2] = 0;
-	   }
-          pixdata>>=4;
-          if(J & 0x10) 
-			  {
-				  C[3]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+3] = 1;
-		   else priora[x+3] = 0;
-		  }
-          pixdata>>=4;
-          if(J & 0x08)
-			  {
-				  C[4]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+4] = 1;
-		   else priora[x+4] = 0;
-		  }
-          pixdata>>=4;
-          if(J & 0x04) 
-	    	{
-			C[5]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+5] = 1;
-		   else priora[x+5] = 0;
-		  }
-          pixdata>>=4;
-          if(J & 0x02) 
-		  {
-				  C[6]=VB[pixdata&3];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+6] = 1;
-		   else priora[x+6] = 0;
-		  }
-          pixdata>>=4;
-          if(J & 0x01) 
-		  {
-			  C[7]=VB[pixdata];
-		  if(!(atr & SP_BACK) && (pixdata&0x3)) priora[x+7] = 1;
-		   else priora[x+7] = 0;
-		  }
-        }
-	 }
+
       }
 	}
 	SpriteBlurp = 0;
@@ -3171,10 +3064,10 @@ memset(chrambank_V, 0, 0x20 );
 	colb	= 0;
 	 dmatgl    = 0;
 	 dmaread   = 0;
-	 dmawrite  = 0;
+	 dmawrite  = 0;  
 	 dmalenght = 0;
 
-		if (wscre && vt03_mode)
+		if (vt03_mode)
 		{
 			shift_bg_1 = 4;
 				shift_bg_2 = 0xF;
@@ -3182,9 +3075,8 @@ memset(chrambank_V, 0, 0x20 );
 		}
 		else
 		{
-			if(!vt03_mode)shift_bg_1 = 2;
-			else shift_bg_1 = 4;
-			shift_bg_2 = 0xF;
+			shift_bg_1 = 2;
+			shift_bg_2 = 3;
 		}
 													 
   
@@ -3193,7 +3085,7 @@ memset(chrambank_V, 0, 0x20 );
 void FCEUPPU_Power(void) {
 
 //	if(wscre) wss = 512; //mod: hmmm, can be change in future
-  			  
+    is_2_bg = is_3_bg = 0;
 	memset(NTARAM, 0x00, 0x800);
 	memset(NTARAM2, 0x00, 0x800);
 	memset(NTARAM3, 0x00, 0x800);
@@ -3380,32 +3272,16 @@ int FCEUPPU_Loop(int skip) {
 
 			deemp = PPU[1] >> 5;
 			dmc7bfl = 0;
-         /* manual samples can't play correctly with overclocking */
-			if (DMC_7bit && skip_7bit_overclocking)
-				totalscanlines = normal_scanlines;
-			else
-				totalscanlines = normal_scanlines + (overclock_state ? extrascanlines : 0);
 
-														  
-																					 
-										
-		 
-																						
-				  
-			if (exscanlines)totalscanlines = 240 + exscanlines;
-			for (scanline = 0; scanline < totalscanlines; ) {	/* scanline is incremented in  DoLine.  Evil. :/ */
+
+
+
+			for (scanline = 0; scanline < 240; ) {	/* scanline is incremented in  DoLine.  Evil. :/ */
 				deempcnt[deemp]++;
 				if ((PPUViewer) && (scanline == PPUViewScanline)) UpdatePPUView(1);
 				DoLine();
-				if (scanline < normal_scanlines || scanline == totalscanlines)
-					overclocked = 0;
-				else {
+	
 
-																	
-					   
-			
-					overclocked = 1;
-				}
 			}
 
 			DMC_7bit = 0;
@@ -3478,6 +3354,8 @@ SFORMAT FCEUPPU_STATEINFO[] = {
 	{ &kook, 1, "KOOK" },
 	{ &inc32_2nd, 1, "INC2" },
 	{ &inc32_3nd, 1, "INC3" },
+	{ &is_2_bg, 1, "IS2B" },
+	{ &is_3_bg, 1, "IS3B" },
 	{ &stopclock, 1, "FLAGV" },
 	{ &ppudead, 1, "DEAD" },
 	{ &XOffset, 1, "XOFF" },

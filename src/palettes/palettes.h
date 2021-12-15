@@ -1,19 +1,19 @@
-pal rp2c04_0001[64] = {
+pal rp2c04_0001[256] = {
  #include "rp2c04-0001.h"
 };
 
-pal rp2c04_0002[64] = {
+pal rp2c04_0002[256] = {
  #include "rp2c04-0002.h"
 };
 
-pal rp2c04_0003[64] = {
+pal rp2c04_0003[256] = {
  #include "rp2c04-0003.h"
 };
-pal rp2c04_0004[64] = {
+pal rp2c04_0004[256] = {
  #include "rp2c04-0004.h"
 };
 
-pal rp2c03[64] = {
+pal rp2c03[256] = {
  #include "rp2c03.h"
 };
 

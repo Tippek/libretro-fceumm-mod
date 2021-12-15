@@ -683,7 +683,7 @@ int iNESLoad(const char *name, FCEUFILE *fp) {
 if ((head.reserve[3] & 0x10))cpuclock = 1;
 else cpuclock = 0;						//mod: 0x0B byte, cpu clock
 
-vblankscanlines = head.reserve[4]*2; //mod: 0xC bytes - extra pre-render scanlines 
+vblines = head.reserve[4]*2; //mod: 0xC bytes - extra pre-render scanlines 
 
 if (head.reserve[5] & 1)sprites256 = 1;	//mod: new OAM engine
 
