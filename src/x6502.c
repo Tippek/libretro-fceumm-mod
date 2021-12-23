@@ -178,7 +178,7 @@ static uint8 ZNTable[256];
     if (x) 	\
 	{		\
 		_A = _A/x; X_ZN(_A);	\
-	}	\	
+	}	\
 }										
 #define DAV  if(x)_A = _A%x;X_ZN(_A);	//mod: well another division option
 

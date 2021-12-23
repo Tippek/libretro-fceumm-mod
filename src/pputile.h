@@ -1,12 +1,15 @@
-	uint8 *S2 = PALRAM;
-	uint32 pixdata2 = 0;
+
+
+
+uint8 *S2 = PALRAM;
+static uint32 pixdata2 = 0;
 static uint32 attl = 0;
 uint8 *C2;
 register uint8 cc2 = 0;
 uint32 vadr2 = 0;
 	uint8 *S3 = PALRAM;
-	uint32 pixdata3 = 0;
-	uint32 prior3 = 0;
+static	uint32 pixdata3 = 0;
+static	uint32 prior3 = 0;
 static uint32 attl3 = 0;
 uint8 *C3;
 register uint8 cc3 = 0;
@@ -83,7 +86,7 @@ for(int x = 0; x<8; x++)
 if(pixdata3&0xF)
 {
 P[x] = S[pixdata3 & 0xF | ((pixdata3_ex&shift_bg_2)<<shift_bg_1)]; 
-if(!(prior3&0xF) && ((pixdata3 & 0xF) | (((pixdata3_ex)&0xF)<<4)))priora_bg_3rd[X1*8-16+x] = 1;
+if(!(prior3&0xF))priora_bg_3rd[X1*8-16+x] = 1;
 }
 else if(pixdata & color_flag)
 {
@@ -150,14 +153,16 @@ if(vt03_mode)
 		pshift2[2]<<=8;
 		pshift2[3]<<=8;
 	    atlatch2 >>= 4;
-
-
+/*test some vars for armv8*/
+static uint8 C3_extra[8];
 	zz3 = RefreshAddr3 & 0x1F;
 	C3 = vnapage3[(RefreshAddr3 >> 10) & 3];
 	vadr3 = (C3[RefreshAddr3 & 0x3ff] << 5) + vofs3;	// Fetch name table byte.
 	if((wscre)&&(NTATRIB3[RefreshAddr3&wscre_32_2_3]&0x10))vadr3 = ((C3[RefreshAddr3 & 0x3ff] << 5) + 0xC000)  | ((RefreshAddr3 >> 12) & 7);;	// Fetch name table byte.
 
 
+   
+	  
 #ifdef PPUT_HOOK
 	PPU_hook(0x2000 | (RefreshAddr3 & 0xfff));
 #endif
@@ -190,6 +195,7 @@ atlatch3|=cc3<<8;
 		pshift3[2]<<=8;
 		pshift3[3]<<=8;
 	    atlatch3 >>= 4;
+		
 
 }
 

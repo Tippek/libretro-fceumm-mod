@@ -60,7 +60,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel);
 static void RefreshSprites(void);
 static void CopySprites(uint8 *target);
 int sprites256 = 0;
-int exscanlines = 0;
+int exscanlines = 0; 
 int vblines = 0;
 int vt03_mmc3_flag = 0;
 int vt03_mode = 0;
@@ -76,9 +76,9 @@ uint8 shift_bg_2 = 3;
 
 																   
 																	
-uint8 priora_bg[272+256];
-uint8 priora_bg_3rd[272 + 256];
-uint8 priora[256+256+16];
+static uint8 priora_bg[272+256];
+static uint8 priora_bg_3rd[272 + 256];
+static uint8 priora[256+256+16];
 uint8 stopclock = 0;
 									   
 								 
@@ -95,24 +95,18 @@ static uint32 ppulut4[256];
 static uint32 ppulut5[256];
 static uint32 ppulut6[256*8];
 static uint32 ppulut7[256*8];
-uint8 extra_ppu[0x10000];
-uint8 extra_ppu2[0x10000];
+static uint8 extra_ppu[0x10000];
+static uint8 extra_ppu2[0x10000];
 						   
 							
-uint8 extra_ppu3[0x10000];
-uint8 chrramm[0x20000];
-uint8 chrambank_V[0x20];
+static uint8 extra_ppu3[0x10000];
+static uint8 chrramm[0x20000];
+static uint8 chrambank_V[0x20];
 uint8 inc32_2nd = 0;
 uint8 inc32_3nd = 0;
 						   
-					   
-								  
-int ex40 = 0x40;
-int ex3f = 0x3f;
-int ex40404040 = 0x80808080;
-int test = 0;
 
-uint8 buffer_pal[256*3];
+static uint8 buffer_pal[256*3];
 			  
 
 
@@ -257,30 +251,6 @@ uint8 * MMC5BGVRAMADR(uint32 V) {
 	} else return &MMC5BGVPage[(V) >> 10][(V)];
 }
 
-																   
-																			  
-						
-						   
-
-
-
-
-
-
-
-
-
-
-
-
-										   
-
-																									 
-
-
-
-
-				 
 
 static DECLFR(A2002) {
 	uint8 ret;
@@ -306,12 +276,7 @@ static DECLFR(A2002) {
 	return ret;
 }
 
-					  
 
-					   
-					 
- 
- 
 
 static DECLFR(A200x) {	/* Not correct for $2004 reads. */
 	FCEUPPU_LineUpdate();
@@ -630,10 +595,16 @@ static DECLFW(B2001) {
 	if (V & 0xE0)
 		deemp = V >> 5;
 }
-
+      char msg[256];
 static DECLFW(B3017) {
     is_3_bg = 1;
+
 	uint32 tmp = RefreshAddr3 & 0xFFFF;
+if(!tmp && V)
+{
+	sprintf(msg, "3017 RefreshAddr3: %2x, DATA: %2x, PC: %x\n", RefreshAddr3, V, X.PC );
+	FCEUD_DispMessage(msg);
+}
 	//FCEUPPU_LineUpdate();
 	PPUGenLatch3 = V;
 	extra_ppu3[tmp] = V;
@@ -869,6 +840,11 @@ void B3017_ex(uint32 A, uint8 V)
 {
     is_3_bg = 1;
 	uint32 tmp = RefreshAddr3 & 0xFFFF;
+	if(!tmp && V)
+	{
+		sprintf(msg, "3017 DMA RefreshAddr3: %2x, DATA: %2x, PC: %x, INPUT: %x\n", RefreshAddr3, V, X.PC, A );
+		FCEUD_DispMessage(msg);
+	}
 	extra_ppu3[tmp] = V;
 	if (wscre_new && tmp > 0x1FFF && tmp < 0x4000)
 	{
@@ -1941,7 +1917,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 				  
 	static uint32 pshift[4];
 	static uint32 pshift2[4];
-	static uint32 pshift3[4];
+	static uint32 pshift3[4]; 
 	static uint32 atlatch;
 	static uint32 atrib  = 0;
 	static uint32 atlatch2;
@@ -1987,8 +1963,8 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 	P = Pline;
 
 	vofs = 0;
-	int vofs2 = 0;
-	int vofs3 = 0;
+	uint32 vofs2 = 0;
+	uint32 vofs3 = 0;
 	if(PEC586Hack)
 		vofs = ((RefreshAddr & 0x200) << 3) | ((RefreshAddr >> 12) & 7);
 	else
@@ -1997,7 +1973,7 @@ static void FASTAPASS(1) RefreshLine(int lastpixel) {
 	if(vt03_mode)
     {
     vofs = ((PPU[0] & 0x10) << 11) | ((RefreshAddr >> 12) & 7);
-	vofs2 =  (RefreshAddr2 >> 12) & 7;
+	vofs2 =  (RefreshAddr2 >> 12) & 7; 
 	vofs3 =  (RefreshAddr3 >> 12) & 7;
     }
 	if (!ScreenON && !SpriteON) {
@@ -2218,6 +2194,8 @@ else
 	}
 
 #undef vofs
+#undef vofs2
+#undef vofs3
 #undef RefreshAddr
 #undef RefreshAddr2
 #undef RefreshAddr3
@@ -3044,14 +3022,15 @@ void FCEUPPU_Reset(void) {
 	memset(extra_ppu, 0, 0x10000 );
 	memset(extra_ppu2, 0, 0x10000 );
 	memset(extra_ppu3, 0, 0x10000 );
+	
 	memset(chrramm, 0, 0x20000 );
-memset(chrambank_V, 0, 0x20 );
+	memset(chrambank_V, 0, 0x20 );
 	
 	PPUSPL = 0;
 	PPUGenLatch = 0;
 	RefreshAddr = TempAddr = 0;
-	RefreshAddr2 = TempAddr2 = 32;
-	RefreshAddr3 = TempAddr3 = 32;
+	RefreshAddr2 = TempAddr2 = 0;
+	RefreshAddr3 = TempAddr3 = 0;
 	vtoggle = vtoggle2 = vtoggle3 =  0;
 	inc32_2nd = 0;
 	inc32_3nd = 0;
